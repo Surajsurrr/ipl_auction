@@ -28,9 +28,11 @@
                 <li><a href="../index.php">Home</a></li>
                 <li><a href="players.php">Players</a></li>
                 <li><a href="teams.php">Teams</a></li>
-                <li><a href="auction.php">Auction</a></li>
-                <li><a href="updates.php">Updates</a></li>
-                <?php if (isLoggedIn()): ?>
+                <?php if (isset($_SESSION['admin_logged_in']) && $_SESSION['admin_logged_in']): ?>
+                    <li><a href="../admin/dashboard.php" class="nav-button" style="background: linear-gradient(135deg, #fbbf24 0%, #f59e0b 100%);">⚙️ Admin Panel</a></li>
+                <?php elseif (isLoggedIn()): ?>
+                    <li><a href="my-auctions.php">My Auctions</a></li>
+                    <li><a href="../user/dashboard.php">Dashboard</a></li>
                     <li><a href="../auth/logout.php">Logout</a></li>
                 <?php else: ?>
                     <li><a href="../auth/login.php" class="nav-button">Login</a></li>

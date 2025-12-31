@@ -1,3 +1,12 @@
+<?php 
+require_once '../config/session.php';
+require_once '../includes/auction_room_functions.php';
+
+requireLogin();
+
+$current_user = getCurrentUser();
+$rooms = getUserRooms($current_user['user_id']);
+?>
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -159,15 +168,6 @@
     </style>
 </head>
 <body>
-    <?php 
-    require_once '../config/session.php';
-    require_once '../includes/auction_room_functions.php';
-    
-    requireLogin();
-    
-    $current_user = getCurrentUser();
-    $rooms = getUserRooms($current_user['user_id']);
-    ?>
     
     <!-- Navigation -->
     <nav class="navbar">

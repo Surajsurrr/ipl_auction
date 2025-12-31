@@ -141,7 +141,7 @@
                 <li><a href="../index.php">Home</a></li>
                 <li><a href="../pages/players.php">Players</a></li>
                 <li><a href="../pages/teams.php">Teams</a></li>
-                <li><a href="../pages/auction.php">Auction</a></li>
+                <li><a href="../pages/my-auctions.php">My Auctions</a></li>
                 <li><a href="dashboard.php" class="active">Dashboard</a></li>
                 <li><a href="../auth/logout.php">Logout</a></li>
             </ul>
