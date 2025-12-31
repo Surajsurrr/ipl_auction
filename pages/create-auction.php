@@ -1,3 +1,39 @@
+<?php 
+require_once '../config/session.php';
+require_once '../includes/auction_room_functions.php';
+
+requireLogin();
+
+$current_user = getCurrentUser();
+$room_created = false;
+$room_code = '';
+$room_id = '';
+$error = '';
+
+if ($_SERVER['REQUEST_METHOD'] == 'POST') {
+    $room_name = $_POST['room_name'] ?? '';
+    $max_participants = intval($_POST['max_participants'] ?? 10);
+    $budget = floatval($_POST['budget'] ?? 120) * 10000000; // Convert to paise
+    
+    if ($room_name) {
+        $result = createAuctionRoom($current_user['user_id'], $room_name, $max_participants, $budget);
+        
+        if ($result['success']) {
+            $room_created = true;
+            $room_code = $result['room_code'];
+            $room_id = $result['room_id'];
+            
+            // Auto-join the creator
+            $team_name = $_POST['team_name'] ?? ($current_user['username'] . "'s Team");
+            joinAuctionRoom($room_code, $current_user['user_id'], $team_name);
+        } else {
+            $error = $result['message'];
+        }
+    } else {
+        $error = 'Please provide a room name';
+    }
+}
+?>
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -129,42 +165,6 @@
     </style>
 </head>
 <body>
-    <?php 
-    require_once '../config/session.php';
-    require_once '../includes/auction_room_functions.php';
-    
-    requireLogin();
-    
-    $current_user = getCurrentUser();
-    $room_created = false;
-    $room_code = '';
-    $room_id = '';
-    $error = '';
-    
-    if ($_SERVER['REQUEST_METHOD'] == 'POST') {
-        $room_name = $_POST['room_name'] ?? '';
-        $max_participants = intval($_POST['max_participants'] ?? 10);
-        $budget = floatval($_POST['budget'] ?? 120) * 10000000; // Convert to paise
-        
-        if ($room_name) {
-            $result = createAuctionRoom($current_user['user_id'], $room_name, $max_participants, $budget);
-            
-            if ($result['success']) {
-                $room_created = true;
-                $room_code = $result['room_code'];
-                $room_id = $result['room_id'];
-                
-                // Auto-join the creator
-                $team_name = $_POST['team_name'] ?? ($current_user['username'] . "'s Team");
-                joinAuctionRoom($room_code, $current_user['user_id'], $team_name);
-            } else {
-                $error = $result['message'];
-            }
-        } else {
-            $error = 'Please provide a room name';
-        }
-    }
-    ?>
     
     <!-- Navigation -->
     <nav class="navbar">

@@ -1,3 +1,37 @@
+<?php 
+require_once '../config/session.php';
+require_once '../includes/auction_room_functions.php';
+
+requireLogin();
+
+$current_user = getCurrentUser();
+$room_code = $_GET['code'] ?? $_POST['room_code'] ?? '';
+$room = null;
+$error = '';
+$success = false;
+
+if ($room_code) {
+    $room = getRoomByCode($room_code);
+}
+
+if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['action']) && $_POST['action'] == 'join') {
+    $room_code = $_POST['room_code'];
+    $team_name = $_POST['team_name'] ?? '';
+    
+    if ($team_name) {
+        $result = joinAuctionRoom($room_code, $current_user['user_id'], $team_name);
+        
+        if ($result['success']) {
+            header('Location: auction-room.php?room_id=' . $result['room_id']);
+            exit();
+        } else {
+            $error = $result['message'];
+        }
+    } else {
+        $error = 'Please provide a team name';
+    }
+}
+?>
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -119,40 +153,6 @@
     </style>
 </head>
 <body>
-    <?php 
-    require_once '../config/session.php';
-    require_once '../includes/auction_room_functions.php';
-    
-    requireLogin();
-    
-    $current_user = getCurrentUser();
-    $room_code = $_GET['code'] ?? $_POST['room_code'] ?? '';
-    $room = null;
-    $error = '';
-    $success = false;
-    
-    if ($room_code) {
-        $room = getRoomByCode($room_code);
-    }
-    
-    if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['action']) && $_POST['action'] == 'join') {
-        $room_code = $_POST['room_code'];
-        $team_name = $_POST['team_name'] ?? '';
-        
-        if ($team_name) {
-            $result = joinAuctionRoom($room_code, $current_user['user_id'], $team_name);
-            
-            if ($result['success']) {
-                header('Location: auction-room.php?room_id=' . $result['room_id']);
-                exit();
-            } else {
-                $error = $result['message'];
-            }
-        } else {
-            $error = 'Please provide a team name';
-        }
-    }
-    ?>
     
     <!-- Navigation -->
     <nav class="navbar">

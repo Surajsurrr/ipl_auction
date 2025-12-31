@@ -1,3 +1,60 @@
+<?php 
+require_once '../config/session.php';
+require_once '../includes/auction_room_functions.php';
+require_once '../includes/player_functions.php';
+
+requireLogin();
+
+$current_user = getCurrentUser();
+$room_id = $_GET['room_id'] ?? 0;
+
+$room = getRoomById($room_id);
+if (!$room) {
+    header('Location: my-auctions.php');
+    exit();
+}
+
+$userCheck = isUserInRoom($room_id, $current_user['user_id']);
+if (!$userCheck['in_room']) {
+    header('Location: join-auction.php?code=' . $room['room_code']);
+    exit();
+}
+
+$participants = getRoomParticipants($room_id);
+$is_host = $room['created_by'] == $current_user['user_id'];
+$participant_id = $userCheck['participant_id'];
+
+// Handle actions
+if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['action'])) {
+    if ($_POST['action'] == 'start' && $is_host) {
+        startAuctionRoom($room_id, $current_user['user_id']);
+        header('Location: auction-room.php?room_id=' . $room_id);
+        exit();
+    } elseif ($_POST['action'] == 'next_player' && $is_host) {
+        $group = $_POST['group'] ?? null;
+        getNextPlayerForRoom($room_id, $group);
+        header('Location: auction-room.php?room_id=' . $room_id);
+        exit();
+    } elseif ($_POST['action'] == 'bid') {
+        $increment = floatval($_POST['increment'] ?? 1000000);
+        $new_bid = $room['current_bid'] + $increment;
+        placeBidInRoom($room_id, $participant_id, $new_bid);
+        header('Location: auction-room.php?room_id=' . $room_id);
+        exit();
+    } elseif ($_POST['action'] == 'finalize' && $is_host) {
+        finalizePlayerInRoom($room_id);
+        header('Location: auction-room.php?room_id=' . $room_id);
+        exit();
+    }
+}
+
+// Reload room data
+$room = getRoomById($room_id);
+$current_player = null;
+if ($room['current_player_id']) {
+    $current_player = getPlayerById($room['current_player_id']);
+}
+?>
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -203,63 +260,6 @@
     </style>
 </head>
 <body>
-    <?php 
-    require_once '../config/session.php';
-    require_once '../includes/auction_room_functions.php';
-    require_once '../includes/player_functions.php';
-    
-    requireLogin();
-    
-    $current_user = getCurrentUser();
-    $room_id = $_GET['room_id'] ?? 0;
-    
-    $room = getRoomById($room_id);
-    if (!$room) {
-        header('Location: my-auctions.php');
-        exit();
-    }
-    
-    $userCheck = isUserInRoom($room_id, $current_user['user_id']);
-    if (!$userCheck['in_room']) {
-        header('Location: join-auction.php?code=' . $room['room_code']);
-        exit();
-    }
-    
-    $participants = getRoomParticipants($room_id);
-    $is_host = $room['created_by'] == $current_user['user_id'];
-    $participant_id = $userCheck['participant_id'];
-    
-    // Handle actions
-    if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['action'])) {
-        if ($_POST['action'] == 'start' && $is_host) {
-            startAuctionRoom($room_id, $current_user['user_id']);
-            header('Location: auction-room.php?room_id=' . $room_id);
-            exit();
-        } elseif ($_POST['action'] == 'next_player' && $is_host) {
-            $group = $_POST['group'] ?? null;
-            getNextPlayerForRoom($room_id, $group);
-            header('Location: auction-room.php?room_id=' . $room_id);
-            exit();
-        } elseif ($_POST['action'] == 'bid') {
-            $increment = floatval($_POST['increment'] ?? 1000000);
-            $new_bid = $room['current_bid'] + $increment;
-            placeBidInRoom($room_id, $participant_id, $new_bid);
-            header('Location: auction-room.php?room_id=' . $room_id);
-            exit();
-        } elseif ($_POST['action'] == 'finalize' && $is_host) {
-            finalizePlayerInRoom($room_id);
-            header('Location: auction-room.php?room_id=' . $room_id);
-            exit();
-        }
-    }
-    
-    // Reload room data
-    $room = getRoomById($room_id);
-    $current_player = null;
-    if ($room['current_player_id']) {
-        $current_player = getPlayerById($room['current_player_id']);
-    }
-    ?>
     
     <nav class="navbar">
         <div class="nav-container">
