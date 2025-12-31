@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Live Auction - IPL Auction</title>
-    <link rel="stylesheet" href="../assets/css/style.css">
+    <link rel="stylesheet" href="../assets/css/style.css?v=2.0">
 </head>
 <body>
     <?php 
@@ -197,9 +197,10 @@
                             <div style="max-width: 600px; margin: 2rem auto;">
                                 <?php 
                                 $groups = [
-                                    'A' => '> ₹2 Crore',
-                                    'B' => '₹1-2 Crore',
-                                    'C' => '< ₹1 Crore'
+                                    'Marquee' => 'Marquee Players',
+                                    'A' => '>= ₹200 Lakh',
+                                    'B' => '₹100-200 Lakh',
+                                    'C' => '< ₹100 Lakh'
                                 ];
                                 foreach ($groups as $group => $description): 
                                 ?>

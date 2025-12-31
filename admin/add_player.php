@@ -4,14 +4,20 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Add Player - IPL Auction</title>
-    <link rel="stylesheet" href="../assets/css/style.css">
+    <link rel="stylesheet" href="../assets/css/style.css?v=2.0">
 </head>
 <body>
     <?php 
-    require_once '../config/session.php';
-    require_once '../includes/player_functions.php';
+    session_start();
     
-    requireLogin();
+    // Check if admin is logged in
+    if (!isset($_SESSION['admin_logged_in']) || !$_SESSION['admin_logged_in']) {
+        header('Location: login.php');
+        exit();
+    }
+    
+    require_once '../config/database.php';
+    require_once '../includes/player_functions.php';
     
     $success = '';
     $error = '';
@@ -21,8 +27,7 @@
             'player_name' => $_POST['player_name'],
             'player_type' => $_POST['player_type'],
             'player_role' => $_POST['player_role'],
-            'base_price' => $_POST['base_price'] * 10000000, // Convert crores to paise
-            'auction_group' => $_POST['auction_group'],
+            'base_price' => $_POST['base_price'], // Already in rupees
             'nationality' => $_POST['nationality'],
             'age' => $_POST['age'],
             'previous_team' => $_POST['previous_team']
@@ -40,6 +45,15 @@
     
     <nav class="navbar">
         <div class="nav-container">
+            <a href="dashboard.php" class="logo">🏏 IPL Admin</a>
+            <ul class="nav-menu">
+                <li><a href="dashboard.php">Dashboard</a></li>
+                <li><a href="add_player.php">Add Player</a></li>
+                <li><a href="../index.php">View Site</a></li>
+                <li><a href="logout.php" class="nav-button">Logout</a></li>
+            </ul>
+        </div>
+    </nav>
             <a href="../index.php" class="logo">🏏 IPL Auction</a>
             <ul class="nav-menu">
                 <li><a href="../index.php">Home</a></li>

@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Players - IPL Auction</title>
-    <link rel="stylesheet" href="../assets/css/style.css">
+    <link rel="stylesheet" href="../assets/css/style.css?v=2.0">
 </head>
 <body>
     <?php 
@@ -61,9 +61,10 @@
                     <label>Group</label>
                     <select id="filter-group" class="form-control">
                         <option value="">All Groups</option>
-                        <option value="A" <?php echo (isset($_GET['group']) && $_GET['group'] == 'A') ? 'selected' : ''; ?>>Group A (> ₹2 Cr)</option>
-                        <option value="B" <?php echo (isset($_GET['group']) && $_GET['group'] == 'B') ? 'selected' : ''; ?>>Group B (₹1-2 Cr)</option>
-                        <option value="C" <?php echo (isset($_GET['group']) && $_GET['group'] == 'C') ? 'selected' : ''; ?>>Group C (< ₹1 Cr)</option>
+                        <option value="Marquee" <?php echo (isset($_GET['group']) && $_GET['group'] == 'Marquee') ? 'selected' : ''; ?>>Marquee (Marquee Players)</option>
+                        <option value="A" <?php echo (isset($_GET['group']) && $_GET['group'] == 'A') ? 'selected' : ''; ?>>Group A (>= ₹200 Lakh)</option>
+                        <option value="B" <?php echo (isset($_GET['group']) && $_GET['group'] == 'B') ? 'selected' : ''; ?>>Group B (₹100-200 Lakh)</option>
+                        <option value="C" <?php echo (isset($_GET['group']) && $_GET['group'] == 'C') ? 'selected' : ''; ?>>Group C (< ₹100 Lakh)</option>
                     </select>
                 </div>
                 <div class="form-group">
@@ -100,7 +101,7 @@
                             <p><strong>Age:</strong> <?php echo $player['age']; ?> years</p>
                             <p><strong>Group:</strong> <?php 
                                 echo $player['auction_group'];
-                                $group_desc = ['A' => ' (> ₹2 Cr)', 'B' => ' (₹1-2 Cr)', 'C' => ' (< ₹1 Cr)'];
+                                $group_desc = ['Marquee' => ' (Marquee)', 'A' => ' (>= ₹200 L)', 'B' => ' (₹100-200 L)', 'C' => ' (< ₹100 L)'];
                                 echo isset($group_desc[$player['auction_group']]) ? $group_desc[$player['auction_group']] : '';
                             ?></p>
                             <p><strong>Base Price:</strong> <?php echo formatCurrency($player['base_price']); ?></p>

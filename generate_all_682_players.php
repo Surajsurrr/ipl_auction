@@ -40,14 +40,12 @@ function mapRole($specialism) {
 }
 
 function determineAuctionGroup($basePrice) {
-    if ($basePrice >= 20000000) {
+    if ($basePrice >= 20000000) { // >= 2 Crore
         return 'A';
-    } elseif ($basePrice >= 12500000) {
+    } elseif ($basePrice >= 10000000) { // 1 to < 2 Crore
         return 'B';
-    } elseif ($basePrice >= 7500000) {
+    } else { // < 1 Crore
         return 'C';
-    } else {
-        return 'D';
     }
 }
 
@@ -56,12 +54,12 @@ function escapeSqlString($str) {
 }
 
 // Read CSV file
-$csvPath = 'c:\xampp\htdocs\ipl_auction\1731674068078_TATA IPL 2025- Auction List -15.11.24.csv';
-$outputPath = 'c:\xampp\htdocs\ipl_auction\database\all_682_players.sql';
+$csvPath = __DIR__ . '/1731674068078_TATA IPL 2025- Auction List -15.11.24.csv';
+$outputPath = __DIR__ . '/database/all_682_players.sql';
 
 $sqlStatements = [];
 $playerCount = 0;
-$groupCounts = ['A' => 0, 'B' => 0, 'C' => 0, 'D' => 0];
+$groupCounts = ['A' => 0, 'B' => 0, 'C' => 0];
 
 if (($handle = fopen($csvPath, "r")) !== FALSE) {
     $rowNum = 0;
@@ -154,11 +152,13 @@ if (($handle = fopen($csvPath, "r")) !== FALSE) {
 // Write to SQL file
 $output = "-- IPL 2025 Auction - All Players\n";
 $output .= "-- Total Players: $playerCount\n";
-$output .= "-- Group A (≥20 Cr): {$groupCounts['A']} players\n";
-$output .= "-- Group B (12.5-20 Cr): {$groupCounts['B']} players\n";
-$output .= "-- Group C (7.5-12.5 Cr): {$groupCounts['C']} players\n";
-$output .= "-- Group D (<7.5 Cr): {$groupCounts['D']} players\n";
-$output .= "-- Generated on: 2025-12-30\n\n";
+$output .= "-- Group A (>= 2 Cr): {$groupCounts['A']} players\n";
+$output .= "-- Group B (1 to <2 Cr): {$groupCounts['B']} players\n";
+$output .= "-- Group C (< 1 Cr): {$groupCounts['C']} players\n";
+$output .= "-- Generated on: " . date('Y-m-d H:i:s') . "\n\n";
+
+// First, delete all existing players
+$output .= "DELETE FROM players;\n\n";
 
 foreach ($sqlStatements as $sql) {
     $output .= $sql . "\n";
@@ -168,9 +168,8 @@ file_put_contents($outputPath, $output);
 
 echo "✓ Successfully processed $playerCount players\n\n";
 echo "Distribution across auction groups:\n";
-echo "  Group A (≥20 Cr):      {$groupCounts['A']} players\n";
-echo "  Group B (12.5-20 Cr):  {$groupCounts['B']} players\n";
-echo "  Group C (7.5-12.5 Cr): {$groupCounts['C']} players\n";
-echo "  Group D (<7.5 Cr):     {$groupCounts['D']} players\n\n";
+echo "  Group A (>= 2 Cr):  {$groupCounts['A']} players\n";
+echo "  Group B (1 to <2 Cr):  {$groupCounts['B']} players\n";
+echo "  Group C (< 1 Cr):  {$groupCounts['C']} players\n\n";
 echo "SQL file saved to: $outputPath\n";
 ?>

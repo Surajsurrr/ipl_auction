@@ -2,12 +2,38 @@
 require_once __DIR__ . '/../config/database.php';
 require_once __DIR__ . '/../config/session.php';
 
-// Calculate auction group based on base price
-// Group A: > 2 Crore (20000000)
-// Group B: 1-2 Crore (10000000 - 20000000)
-// Group C: < 1 Crore (< 10000000)
-function calculateAuctionGroup($base_price) {
-    if ($base_price > 20000000) {
+// List of marquee players
+function getMarqueePlayers() {
+    return [
+        'Virat Kohli', 'virat kohli', 'Rohit Sharma', 'KL Rahul', 'Shreyas Iyer',
+        'Suryakumar Yadav', 'Jasprit Bumrah', 'Rishabh Pant', 'M S Dhoni', 'Hardik Pandya',
+        'Shubman Gill'
+    ];
+}
+
+// Check if a player is a marquee player
+function isMarqueePlayer($player_name) {
+    $marquee_players = getMarqueePlayers();
+    foreach ($marquee_players as $marquee) {
+        if (strcasecmp($player_name, $marquee) === 0) {
+            return true;
+        }
+    }
+    return false;
+}
+
+// Calculate auction group based on base price and player name
+// Group Marquee: Special marquee players
+// Group A: >= 200 Lakh (>= 20000000)
+// Group B: 100-200 Lakh (10000000 to < 20000000)
+// Group C: < 100 Lakh (< 10000000)
+function calculateAuctionGroup($base_price, $player_name = '') {
+    // Check if player is a marquee player
+    if ($player_name && isMarqueePlayer($player_name)) {
+        return 'Marquee';
+    }
+    
+    if ($base_price >= 20000000) {
         return 'A';
     } elseif ($base_price >= 10000000) {
         return 'B';
@@ -149,5 +175,12 @@ function updatePlayerStats($player_id, $stats) {
 function formatCurrency($amount) {
     $crores = $amount / 10000000;
     return number_format($crores, 2) . ' Cr';
+}
+
+// Get total players count
+function getTotalPlayersCount() {
+    $sql = "SELECT COUNT(*) as count FROM players";
+    $result = getSingleRow($sql);
+    return $result['count'] ?? 0;
 }
 ?>

@@ -18,7 +18,15 @@ CREATE TABLE users (
     email VARCHAR(100) UNIQUE NOT NULL,
     password VARCHAR(255) NOT NULL,
     full_name VARCHAR(100),
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    phone VARCHAR(20),
+    bio TEXT,
+    favorite_team VARCHAR(100),
+    profile_image VARCHAR(255),
+    city VARCHAR(100),
+    country VARCHAR(100),
+    date_of_birth DATE,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 );
 
 -- Teams table
@@ -42,7 +50,7 @@ CREATE TABLE players (
     player_type ENUM('Indian', 'Indian Uncapped', 'Overseas', 'Overseas Uncapped') NOT NULL,
     player_role ENUM('Batsman', 'Bowler', 'All-Rounder', 'Wicket-Keeper') NOT NULL,
     base_price DECIMAL(15, 2) NOT NULL,
-    auction_group ENUM('A', 'B', 'C', 'D') NOT NULL,
+    auction_group ENUM('Marquee', 'A', 'B', 'C', 'D') NOT NULL,
     previous_team VARCHAR(100),
     nationality VARCHAR(50) NOT NULL,
     age INT,
@@ -77,7 +85,7 @@ CREATE TABLE auction_session (
     session_id INT AUTO_INCREMENT PRIMARY KEY,
     session_name VARCHAR(100) NOT NULL,
     current_player_id INT,
-    current_group ENUM('A', 'B', 'C', 'D'),
+    current_group ENUM('Marquee', 'A', 'B', 'C', 'D'),
     is_active BOOLEAN DEFAULT FALSE,
     current_bid DECIMAL(15, 2),
     current_bidder_team_id INT,

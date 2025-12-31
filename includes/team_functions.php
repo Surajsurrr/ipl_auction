@@ -122,4 +122,11 @@ function getTeamStatistics($team_id) {
     
     return $stats;
 }
+
+// Get total teams count
+function getTotalTeamsCount() {
+    $sql = "SELECT COUNT(*) as count FROM teams";
+    $result = getSingleRow($sql);
+    return $result['count'] ?? 0;
+}
 ?>

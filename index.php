@@ -4,14 +4,20 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>IPL Auction 2026 - Virtual Auction Platform</title>
-    <link rel="stylesheet" href="assets/css/style.css">
+    <link rel="stylesheet" href="assets/css/style.css?v=2.0">
 </head>
 <body>
     <?php 
     require_once 'config/session.php';
     require_once 'includes/update_functions.php';
+    require_once 'includes/team_functions.php';
+    require_once 'includes/player_functions.php';
     
     $updates = getFeaturedUpdates();
+    
+    // Get real statistics
+    $teams_count = getTotalTeamsCount();
+    $players_count = getTotalPlayersCount();
     ?>
     
     <!-- Navigation -->
@@ -24,8 +30,11 @@
                 <li><a href="pages/teams.php">Teams</a></li>
                 <li><a href="pages/auction.php">Auction</a></li>
                 <li><a href="pages/updates.php">Updates</a></li>
-                <?php if (isLoggedIn()): ?>
-                    <li><a href="auth/logout.php">Logout (<?php echo getCurrentUser()['username']; ?>)</a></li>
+                <?php if (isset($_SESSION['admin_logged_in']) && $_SESSION['admin_logged_in']): ?>
+                    <li><a href="admin/dashboard.php" class="nav-button" style="background: linear-gradient(135deg, #fbbf24 0%, #f59e0b 100%);">⚙️ Admin Panel</a></li>
+                <?php elseif (isLoggedIn()): ?>
+                    <li><a href="user/dashboard.php">My Dashboard</a></li>
+                    <li><a href="auth/logout.php">Logout</a></li>
                 <?php else: ?>
                     <li><a href="auth/login.php" class="nav-button">Login</a></li>
                 <?php endif; ?>
@@ -101,11 +110,11 @@
         <!-- Quick Stats -->
         <div class="grid grid-4">
             <div class="team-card">
-                <h3>8</h3>
+                <h3><?php echo $teams_count; ?></h3>
                 <p>Teams</p>
             </div>
             <div class="team-card">
-                <h3>20+</h3>
+                <h3><?php echo $players_count; ?></h3>
                 <p>Players</p>
             </div>
             <div class="team-card">
@@ -113,7 +122,7 @@
                 <p>Budget Per Team</p>
             </div>
             <div class="team-card">
-                <h3>4</h3>
+                <h3>3</h3>
                 <p>Player Groups</p>
             </div>
         </div>
