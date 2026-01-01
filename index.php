@@ -119,20 +119,12 @@
                     <p>Indian, Overseas, Capped & Uncapped players</p>
                 </div>
                 <div class="team-card">
-                    <h3>📊 Detailed Stats</h3>
-                    <p>Complete player statistics and records</p>
-                </div>
-                <div class="team-card">
                     <h3>🎯 Automated Auction</h3>
                     <p>Random player selection from groups A, B, C, D</p>
                 </div>
                 <div class="team-card">
                     <h3>⚡ Real-time Bidding</h3>
                     <p>Live auction updates and team management</p>
-                </div>
-                <div class="team-card">
-                    <h3>🏏 IPL Updates</h3>
-                    <p>Latest news and auction announcements</p>
                 </div>
             </div>
         </div>
@@ -152,8 +144,7 @@
                 <p>Budget Per Team</p>
             </div>
             <div class="team-card">
-                <h3>3</h3>
-                <p>Player Groups</p>
+                <h3>multiplayer option</h3>
             </div>
         </div>
     </div>
