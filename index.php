@@ -87,7 +87,7 @@
             </div>
             <div class="grid grid-3">
                 <?php foreach ($updates as $update): ?>
-                    <div class="player-card">
+                    <div class="player-card" style="cursor: <?php echo (stripos($update['title'], 'auction rules') !== false) ? 'pointer' : 'default'; ?>;" onclick="<?php echo (stripos($update['title'], 'auction rules') !== false) ? 'showMultiplayerRules()' : ''; ?>">
                         <h3><?php echo htmlspecialchars($update['title']); ?></h3>
                         <p style="color: #666; margin-top: 0.5rem;">
                             <?php echo substr(htmlspecialchars($update['content']), 0, 150); ?>...
@@ -101,6 +101,74 @@
             </div>
             <div style="text-align: center; margin-top: 2rem;">
                 <a href="pages/updates.php" class="btn btn-primary">View All Updates</a>
+            </div>
+        </div>
+
+        <!-- Modal for Multiplayer Auction Rules -->
+        <div id="rulesModal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 1000; overflow-y: auto;">
+            <div style="background: white; max-width: 800px; margin: 50px auto; padding: 2rem; border-radius: 12px; position: relative;">
+                <button onclick="closeRulesModal()" style="position: absolute; top: 1rem; right: 1rem; background: none; border: none; font-size: 2rem; cursor: pointer; color: #666;">&times;</button>
+                <h2 style="color: #3b82f6; margin-bottom: 1.5rem;">🎮 Multiplayer Auction Rules</h2>
+                
+                <div style="line-height: 1.8; color: #333;">
+                    <h3 style="color: #1f2937; margin-top: 1.5rem;">📋 Basic Setup</h3>
+                    <ul style="margin-left: 1.5rem;">
+                        <li><strong>Budget:</strong> Each team gets ₹120 crores to build their squad</li>
+                        <li><strong>Squad Size:</strong> Minimum 18 and maximum 25 players per team</li>
+                        <li><strong>Auction Code:</strong> Room creator gets a unique 6-digit code to share with friends</li>
+                        <li><strong>Teams:</strong> Multiple teams can join using the auction code</li>
+                    </ul>
+
+                    <h3 style="color: #1f2937; margin-top: 1.5rem;">👥 Player Categories</h3>
+                    <ul style="margin-left: 1.5rem;">
+                        <li><strong>Indian Players:</strong> Capped and Uncapped</li>
+                        <li><strong>Overseas Players:</strong> Capped and Uncapped</li>
+                        <li><strong>Maximum 8 overseas players</strong> per squad</li>
+                        <li><strong>Player Groups:</strong> A (₹2 Cr+), B (₹1-2 Cr), C (₹50L-1 Cr), D (<₹50L)</li>
+                    </ul>
+
+                    <h3 style="color: #1f2937; margin-top: 1.5rem;">⚡ Bidding Process</h3>
+                    <ul style="margin-left: 1.5rem;">
+                        <li><strong>Base Price:</strong> Bidding starts at the player's base price</li>
+                        <li><strong>Bid Increment:</strong> 
+                            <ul style="margin-left: 1rem; margin-top: 0.5rem;">
+                                <li>Below ₹3 Cr: ₹10 lakhs minimum increment per bid</li>
+                                <li>Above ₹3 Cr: ₹20 lakhs minimum increment per bid</li>
+                            </ul>
+                        </li>
+                        <li><strong>Bid Timer:</strong> 15 seconds for each bid decision</li>
+                        <li><strong>Wait Button:</strong> Click "Wait" to extend timer by 10 seconds if you need time to think</li>
+                        <li><strong>Real-time Updates:</strong> All teams see bids instantly</li>
+                        <li><strong>Winning:</strong> Highest bidder when timer runs out gets the player</li>
+                        <li><strong>Unsold Players:</strong> Can be brought back in later rounds</li>
+                    </ul>
+
+                    <h3 style="color: #1f2937; margin-top: 1.5rem;">🎯 Auction Flow</h3>
+                    <ul style="margin-left: 1.5rem;">
+                        <li>Players are randomly selected from groups A, B, C, and D</li>
+                        <li>Teams take turns or bid simultaneously (based on room settings)</li>
+                        <li>Budget is automatically deducted after successful bid</li>
+                        <li>Squad composition rules are enforced automatically</li>
+                        <li>Live leaderboard shows team progress</li>
+                    </ul>
+
+                    <h3 style="color: #1f2937; margin-top: 1.5rem;">🏆 Winning Strategy</h3>
+                    <ul style="margin-left: 1.5rem;">
+                        <li>Balance your squad between stars and budget players</li>
+                        <li>Don't exhaust your budget on marquee players</li>
+                        <li>Keep track of overseas player limit (8 max)</li>
+                        <li>Ensure you have enough budget to complete minimum 18 players</li>
+                        <li>Monitor other teams' budgets and needs</li>
+                    </ul>
+
+                    <h3 style="color: #1f2937; margin-top: 1.5rem;">📱 How to Join</h3>
+                    <ul style="margin-left: 1.5rem;">
+                        <li><strong>Create:</strong> Click "Create Auction Room" to start a new auction</li>
+                        <li><strong>Share:</strong> Share the 6-digit code with friends</li>
+                        <li><strong>Join:</strong> Friends click "Join with Code" and enter the code</li>
+                        <li><strong>Start:</strong> Creator starts the auction when all teams are ready</li>
+                    </ul>
+                </div>
             </div>
         </div>
 
@@ -150,5 +218,31 @@
     </div>
 
     <script src="assets/js/script.js"></script>
+    <script>
+        function showMultiplayerRules() {
+            document.getElementById('rulesModal').style.display = 'block';
+            document.body.style.overflow = 'hidden';
+        }
+
+        function closeRulesModal() {
+            document.getElementById('rulesModal').style.display = 'none';
+            document.body.style.overflow = 'auto';
+        }
+
+        // Close modal when clicking outside
+        document.addEventListener('click', function(event) {
+            const modal = document.getElementById('rulesModal');
+            if (event.target === modal) {
+                closeRulesModal();
+            }
+        });
+
+        // Close modal with Escape key
+        document.addEventListener('keydown', function(event) {
+            if (event.key === 'Escape') {
+                closeRulesModal();
+            }
+        });
+    </script>
 </body>
 </html>

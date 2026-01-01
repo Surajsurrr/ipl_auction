@@ -240,7 +240,10 @@ Edit `pages/auction.php` and `assets/js/script.js`:
 - All prices are in Indian Rupees (Crores)
 - 1 Crore = 10,000,000 (1 followed by 7 zeros)
 - Budget per team: ₹120 Crores
-- Minimum bid increment: ₹10 Lakhs (0.1 Crores)
+- Bid Increment Rules:
+  - Below ₹3 Cr: Minimum ₹10 Lakhs (0.1 Crores)
+  - Above ₹3 Cr: Minimum ₹20 Lakhs (0.2 Crores)
+- Bid Timer: 15 seconds per bid (extendable with Wait button)
 
 ## 🤝 Credits
 

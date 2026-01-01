@@ -33,7 +33,8 @@ A complete virtual IPL auction platform built with PHP and MySQL that allows fri
 - ✅ Automated auction flow
 - ✅ Random player selection by group
 - ✅ Real-time bidding system
-- ✅ Incremental bidding (+10 Lakhs, +50 Lakhs)
+- ✅ Dynamic bid increments (10L below 3Cr, 20L above 3Cr)
+- ✅ 15-second bid timer with Wait button
 - ✅ Budget validation
 - ✅ Bid history tracking
 - ✅ Sold/Unsold player management
@@ -154,9 +155,11 @@ ipl_auction/
 
 - **Total Budget**: ₹120 Crores per team
 - **Currency Format**: Crores (1 Cr = 1,00,00,000)
-- **Bid Increments**: 
-  - Minimum: ₹10 Lakhs (0.1 Cr)
-  - Quick bids: +10L, +50L
+- **Bid Increments** (Dynamic): 
+  - Below ₹3 Cr: +10L, +50L, +1Cr
+  - Above ₹3 Cr: +20L, +1Cr, +2Cr
+- **Bid Timer**: 15 seconds per decision
+- **Wait Button**: Extend timer by 10 seconds
 - **Validation**: Real-time budget checking
 
 ## 🎨 Design Features

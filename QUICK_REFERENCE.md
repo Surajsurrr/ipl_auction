@@ -53,8 +53,10 @@ Password: admin123
 ## 💰 Budget Info
 
 - Total per team: ₹120 Crores
-- Minimum bid increment: ₹10 Lakhs
-- Quick bids: +10L, +50L
+- Bid Increment (Dynamic):
+  - Below ₹3 Cr: +10L, +50L, +1Cr
+  - Above ₹3 Cr: +20L, +1Cr, +2Cr
+- Bid Timer: 15 seconds (+ Wait button for 10s extra)
 
 ## 📊 Player Groups
 

@@ -228,8 +228,13 @@ function getNextPlayerForRoom($room_id, $group = null) {
         $insert_sql = "INSERT INTO room_used_players (room_id, player_id) VALUES ($room_id, {$player['player_id']})";
         $conn->query($insert_sql);
         
-        // Set as current player
-        $update_sql = "UPDATE auction_rooms SET current_player_id = {$player['player_id']}, current_bid = {$player['base_price']}, current_bidder_id = NULL WHERE room_id = $room_id";
+        // Set as current player and initialize timer (15 seconds from now)
+        $update_sql = "UPDATE auction_rooms 
+                       SET current_player_id = {$player['player_id']}, 
+                           current_bid = {$player['base_price']}, 
+                           current_bidder_id = NULL,
+                           bid_timer_expires_at = DATE_ADD(NOW(), INTERVAL 15 SECOND)
+                       WHERE room_id = $room_id";
         $conn->query($update_sql);
     }
     
@@ -350,5 +355,50 @@ function getUserRooms($user_id) {
     
     closeDBConnection($conn);
     return $rooms;
+}
+
+// Reset bid timer (when new bid is placed)
+function resetBidTimer($room_id) {
+    $conn = getDBConnection();
+    $room_id = $conn->real_escape_string($room_id);
+    
+    $sql = "UPDATE auction_rooms SET bid_timer_expires_at = DATE_ADD(NOW(), INTERVAL 15 SECOND) 
+            WHERE room_id = $room_id";
+    $conn->query($sql);
+    
+    closeDBConnection($conn);
+}
+
+// Extend bid timer (when wait button is clicked)
+function extendBidTimer($room_id, $seconds = 10) {
+    $conn = getDBConnection();
+    $room_id = $conn->real_escape_string($room_id);
+    $seconds = intval($seconds);
+    
+    $sql = "UPDATE auction_rooms 
+            SET bid_timer_expires_at = DATE_ADD(IFNULL(bid_timer_expires_at, NOW()), INTERVAL $seconds SECOND) 
+            WHERE room_id = $room_id";
+    $conn->query($sql);
+    
+    closeDBConnection($conn);
+}
+
+// Get remaining time for current bid
+function getBidTimeRemaining($room_id) {
+    $conn = getDBConnection();
+    $room_id = $conn->real_escape_string($room_id);
+    
+    $sql = "SELECT TIMESTAMPDIFF(SECOND, NOW(), bid_timer_expires_at) as seconds_remaining 
+            FROM auction_rooms WHERE room_id = $room_id";
+    $result = $conn->query($sql);
+    
+    if ($result && $row = $result->fetch_assoc()) {
+        $seconds = max(0, intval($row['seconds_remaining']));
+        closeDBConnection($conn);
+        return $seconds;
+    }
+    
+    closeDBConnection($conn);
+    return 15; // Default 15 seconds
 }
 ?>

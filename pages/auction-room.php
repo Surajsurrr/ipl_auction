@@ -39,6 +39,13 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['action'])) {
         $increment = floatval($_POST['increment'] ?? 1000000);
         $new_bid = $room['current_bid'] + $increment;
         placeBidInRoom($room_id, $participant_id, $new_bid);
+        // Reset timer on new bid
+        resetBidTimer($room_id);
+        header('Location: auction-room.php?room_id=' . $room_id);
+        exit();
+    } elseif ($_POST['action'] == 'wait') {
+        // Extend timer by 10 seconds
+        extendBidTimer($room_id, 10);
         header('Location: auction-room.php?room_id=' . $room_id);
         exit();
     } elseif ($_POST['action'] == 'finalize' && $is_host) {
@@ -53,6 +60,12 @@ $room = getRoomById($room_id);
 $current_player = null;
 if ($room['current_player_id']) {
     $current_player = getPlayerById($room['current_player_id']);
+}
+
+// Get time remaining for bid timer
+$time_remaining = 15;
+if ($current_player && $room['status'] == 'active') {
+    $time_remaining = getBidTimeRemaining($room_id);
 }
 ?>
 <!DOCTYPE html>
@@ -257,6 +270,37 @@ if ($room['current_player_id']) {
             color: #cbd5e1;
         }
         .activity-item .time { color: #64748b; font-size: 0.75rem; }
+        
+        /* Timer */
+        .bid-timer {
+            text-align: center;
+            margin: 1.5rem 0;
+            padding: 1rem;
+            background: rgba(96, 165, 250, 0.1);
+            border-radius: 10px;
+            border: 2px solid rgba(96, 165, 250, 0.3);
+        }
+        .timer-label { color: #94a3b8; font-size: 0.875rem; margin-bottom: 0.5rem; }
+        .timer-value {
+            font-size: 2.5rem;
+            font-weight: bold;
+            color: #60a5fa;
+            font-family: monospace;
+        }
+        .timer-value.warning { color: #fbbf24; }
+        .timer-value.danger { color: #ef4444; }
+        .btn-wait {
+            margin-top: 1rem;
+            padding: 0.75rem 1.5rem;
+            background: rgba(251, 191, 36, 0.2);
+            color: #fbbf24;
+            border: 2px solid #fbbf24;
+            border-radius: 10px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+        .btn-wait:hover { background: rgba(251, 191, 36, 0.3); transform: scale(1.05); }
     </style>
 </head>
 <body>
@@ -412,22 +456,53 @@ if ($room['current_player_id']) {
                                 <div class="bidder">Current Bidder: <?php echo htmlspecialchars($bidder['team_name']); ?></div>
                             <?php endif; ?>
                         </div>
+                        
+                        <!-- Bid Timer -->
+                        <div class="bid-timer">
+                            <div class="timer-label">Time Remaining</div>
+                            <div class="timer-value" id="timer"><?php echo $time_remaining; ?></div>
+                            <form method="POST" style="display: inline;">
+                                <input type="hidden" name="action" value="wait">
+                                <button type="submit" class="btn-wait" id="waitBtn">⏸️ Wait</button>
+                            </form>
+                        </div>
 
                         <div class="bid-buttons">
+                            <?php 
+                            // Dynamic increment based on current bid
+                            $current_bid_cr = $room['current_bid'] / 10000000;
+                            if ($current_bid_cr >= 3) {
+                                // Above 3 Cr: increment by 20L
+                                $increment1 = 2000000;  // 20L
+                                $increment2 = 10000000; // 1 Cr
+                                $increment3 = 20000000; // 2 Cr
+                                $label1 = '+20 L';
+                                $label2 = '+1 Cr';
+                                $label3 = '+2 Cr';
+                            } else {
+                                // Below 3 Cr: increment by 10L
+                                $increment1 = 1000000;  // 10L
+                                $increment2 = 5000000;  // 50L
+                                $increment3 = 10000000; // 1 Cr
+                                $label1 = '+10 L';
+                                $label2 = '+50 L';
+                                $label3 = '+1 Cr';
+                            }
+                            ?>
                             <form method="POST">
                                 <input type="hidden" name="action" value="bid">
-                                <input type="hidden" name="increment" value="1000000">
-                                <button type="submit" class="btn-bid">+10 L</button>
+                                <input type="hidden" name="increment" value="<?php echo $increment1; ?>">
+                                <button type="submit" class="btn-bid"><?php echo $label1; ?></button>
                             </form>
                             <form method="POST">
                                 <input type="hidden" name="action" value="bid">
-                                <input type="hidden" name="increment" value="5000000">
-                                <button type="submit" class="btn-bid">+50 L</button>
+                                <input type="hidden" name="increment" value="<?php echo $increment2; ?>">
+                                <button type="submit" class="btn-bid"><?php echo $label2; ?></button>
                             </form>
                             <form method="POST">
                                 <input type="hidden" name="action" value="bid">
-                                <input type="hidden" name="increment" value="10000000">
-                                <button type="submit" class="btn-bid">+1 Cr</button>
+                                <input type="hidden" name="increment" value="<?php echo $increment3; ?>">
+                                <button type="submit" class="btn-bid"><?php echo $label3; ?></button>
                             </form>
                         </div>
 
@@ -465,10 +540,44 @@ if ($room['current_player_id']) {
     </div>
 
     <script>
-        // Auto-refresh every 3 seconds
+        // Bid Timer
+        let timeRemaining = <?php echo $time_remaining; ?>;
+        let timerInterval;
+        
+        function startTimer() {
+            const timerElement = document.getElementById('timer');
+            if (!timerElement) return;
+            
+            timerInterval = setInterval(function() {
+                timeRemaining--;
+                timerElement.textContent = timeRemaining;
+                
+                // Change color based on time
+                if (timeRemaining <= 5) {
+                    timerElement.className = 'timer-value danger';
+                } else if (timeRemaining <= 10) {
+                    timerElement.className = 'timer-value warning';
+                } else {
+                    timerElement.className = 'timer-value';
+                }
+                
+                if (timeRemaining <= 0) {
+                    clearInterval(timerInterval);
+                    // Auto-refresh when timer expires
+                    window.location.reload();
+                }
+            }, 1000);
+        }
+        
+        // Check if we're in active bidding
+        <?php if ($current_player && $room['status'] == 'active'): ?>
+            startTimer();
+        <?php endif; ?>
+        
+        // Auto-refresh every 30 seconds (increased from 3 to not interfere with timer)
         setTimeout(function() {
             window.location.reload();
-        }, 3000);
+        }, 30000);
     </script>
 </body>
 </html>
