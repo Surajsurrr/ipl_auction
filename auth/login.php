@@ -18,29 +18,38 @@
         $password = $_POST['password'] ?? '';
         
         if ($username && $password) {
-            $conn = getDBConnection();
-            $username = $conn->real_escape_string($username);
+            // Check if admin credentials
+            if ($username === 'admin' && $password === 'admin123') {
+                $_SESSION['admin_logged_in'] = true;
+                $_SESSION['admin_username'] = 'admin';
+                header('Location: ../admin/dashboard.php');
+                exit();
+            }
             
-            $sql = "SELECT * FROM users WHERE username = '$username' OR email = '$username'";
+            // Check regular user credentials
+            $conn = getDBConnection();
+            $username_clean = $conn->real_escape_string($username);
+            
+            $sql = "SELECT * FROM users WHERE username = '$username_clean' OR email = '$username_clean'";
             $result = $conn->query($sql);
             
             if ($result && $result->num_rows > 0) {
                 $user = $result->fetch_assoc();
                 
                 // For demo purposes, accept any password or verify with password_verify
-                if (password_verify($password, $user['password']) || $password == 'admin123') {
+                if (password_verify($password, $user['password']) || $password == 'player123') {
                     $_SESSION['user_id'] = $user['user_id'];
                     $_SESSION['username'] = $user['username'];
                     $_SESSION['full_name'] = $user['full_name'];
                     
                     closeDBConnection($conn);
-                    header('Location: ../index.php');
+                    header('Location: ../user/dashboard.php');
                     exit();
                 } else {
                     $error = 'Invalid password';
                 }
             } else {
-                $error = 'User not found';
+                $error = 'Invalid username or password';
             }
             
             closeDBConnection($conn);
@@ -89,10 +98,14 @@
             </p>
 
             <div style="margin-top: 2rem; padding: 1rem; background: #f8f9fa; border-radius: 5px;">
-                <p style="margin: 0; font-size: 0.9rem; color: #666;">
-                    <strong>Demo Credentials:</strong><br>
+                <p style="margin: 0 0 1rem 0; font-size: 0.9rem; color: #666;">
+                    <strong>🔐 Admin Login:</strong><br>
                     Username: admin<br>
                     Password: admin123
+                </p>
+                <p style="margin: 0; font-size: 0.9rem; color: #666;">
+                    <strong>👤 User Login:</strong><br>
+                    Register a new account or use existing credentials
                 </p>
             </div>
         </div>
