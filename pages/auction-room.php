@@ -135,10 +135,20 @@ if ($room['current_player_id']) {
     $current_player = getPlayerById($room['current_player_id']);
 }
 
-// Get time remaining for bid timer
+// Get time remaining for bid timer and Unix timestamp for JavaScript
 $time_remaining = 45;
-if ($current_player && $room['status'] == 'active') {
+$timer_expires_timestamp = null;
+if ($current_player && ($room['status'] == 'active' || $room['status'] == 'in_progress')) {
     $time_remaining = getBidTimeRemaining($room_id);
+    
+    // Get Unix timestamp directly from MySQL to avoid timezone issues
+    $conn = getDBConnection();
+    $room_id_escaped = $conn->real_escape_string($room_id);
+    $result = $conn->query("SELECT UNIX_TIMESTAMP(bid_timer_expires_at) as expires_ts FROM auction_rooms WHERE room_id = $room_id_escaped");
+    if ($result && $row = $result->fetch_assoc()) {
+        $timer_expires_timestamp = $row['expires_ts'];
+    }
+    closeDBConnection($conn);
 }
 ?>
 <!DOCTYPE html>
@@ -1007,17 +1017,23 @@ if ($current_player && $room['status'] == 'active') {
         const saleNotification = <?php echo $sale_notification ? json_encode($sale_notification) : 'null'; ?>;
         const shouldAnnounceNext = <?php echo $announce_next ? 'true' : 'false'; ?>;
         
+        console.log('Sale notification data:', saleNotification);
+        console.log('Should announce next:', shouldAnnounceNext);
+        
         // Show sale notification if exists
         if (saleNotification) {
+            console.log('Showing sale notification...');
             showSaleNotification(saleNotification);
         }
         
         // Announce next player after sale notification
         if (shouldAnnounceNext && saleNotification) {
+            console.log('Will announce next player after 5 seconds...');
             setTimeout(() => {
                 speakNextPlayer();
             }, 5000); // After sale notification auto-dismisses
         } else if (shouldAnnounceNext && !saleNotification) {
+            console.log('Will announce next player immediately...');
             // If no sale notification, announce immediately
             setTimeout(() => {
                 speakNextPlayer();
@@ -1165,13 +1181,23 @@ if ($current_player && $room['status'] == 'active') {
             }
         }
         
-        // Bid Timer - Debug info
+        // Bid Timer - Server-synced countdown (persists across page refresh)
         console.log('Page loaded');
-        console.log('Time remaining from PHP:', <?php echo $time_remaining; ?>);
+        console.log('Time remaining from server:', <?php echo $time_remaining; ?>);
         console.log('Current player ID:', <?php echo $room['current_player_id'] ?? 'null'; ?>);
         console.log('Room status:', '<?php echo $room['status']; ?>');
         
-        let timeRemaining = <?php echo $time_remaining; ?>;
+        // Use Unix timestamp from MySQL (timezone-independent)
+        <?php if ($timer_expires_timestamp): ?>
+        const serverExpiryTimestamp = <?php echo $timer_expires_timestamp; ?> * 1000; // Convert to milliseconds
+        console.log('Server expiry timestamp:', serverExpiryTimestamp);
+        console.log('Server expiry time:', new Date(serverExpiryTimestamp));
+        console.log('Current time:', new Date());
+        console.log('Calculated remaining (seconds):', Math.ceil((serverExpiryTimestamp - Date.now()) / 1000));
+        <?php else: ?>
+        const serverExpiryTimestamp = null;
+        <?php endif; ?>
+        
         let timerInterval = null;
         
         function startTimer() {
@@ -1181,33 +1207,48 @@ if ($current_player && $room['status'] == 'active') {
                 return;
             }
             
-            console.log('Starting timer with ' + timeRemaining + ' seconds');
+            if (!serverExpiryTimestamp) {
+                console.log('No active timer');
+                return;
+            }
+            
+            console.log('Starting timer, expires at:', new Date(serverExpiryTimestamp));
             
             // Clear any existing interval
             if (timerInterval) {
                 clearInterval(timerInterval);
             }
             
-            timerInterval = setInterval(function() {
-                timeRemaining--;
-                console.log('Timer tick:', timeRemaining);
-                timerElement.textContent = timeRemaining;
-                
-                // Change color based on time
-                if (timeRemaining <= 5) {
-                    timerElement.className = 'timer-value danger';
-                } else if (timeRemaining <= 10) {
-                    timerElement.className = 'timer-value warning';
-                } else {
-                    timerElement.className = 'timer-value';
-                }
-                
-                if (timeRemaining <= 0) {
-                    clearInterval(timerInterval);
-                    console.log('Timer expired, auto-finalizing...');
-                    autoFinalizeSale();
-                }
-            }, 1000);
+            // Update immediately
+            updateTimerDisplay();
+            
+            // Then update every second
+            timerInterval = setInterval(updateTimerDisplay, 1000);
+        }
+        
+        function updateTimerDisplay() {
+            const timerElement = document.getElementById('timer');
+            if (!timerElement || !serverExpiryTimestamp) return;
+            
+            // Calculate time remaining based on server's Unix timestamp
+            const timeRemaining = Math.max(0, Math.ceil((serverExpiryTimestamp - Date.now()) / 1000));
+            
+            timerElement.textContent = timeRemaining;
+            
+            // Change color based on time
+            if (timeRemaining <= 5) {
+                timerElement.className = 'timer-value danger';
+            } else if (timeRemaining <= 10) {
+                timerElement.className = 'timer-value warning';
+            } else {
+                timerElement.className = 'timer-value';
+            }
+            
+            if (timeRemaining <= 0) {
+                clearInterval(timerInterval);
+                console.log('Timer expired, auto-finalizing...');
+                autoFinalizeSale();
+            }
         }
         
         function autoFinalizeSale() {
