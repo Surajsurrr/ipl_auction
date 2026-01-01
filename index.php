@@ -87,7 +87,21 @@
             </div>
             <div class="grid grid-3">
                 <?php foreach ($updates as $update): ?>
-                    <div class="player-card" style="cursor: <?php echo (stripos($update['title'], 'auction rules') !== false) ? 'pointer' : 'default'; ?>;" onclick="<?php echo (stripos($update['title'], 'auction rules') !== false) ? 'showMultiplayerRules()' : ''; ?>">
+                    <?php 
+                        $is_auction_rules = stripos($update['title'], 'auction rules') !== false;
+                        $is_welcome = stripos($update['title'], 'welcome') !== false;
+                        $is_player_pool = stripos($update['title'], 'player pool') !== false;
+                        $is_clickable = $is_auction_rules || $is_welcome || $is_player_pool;
+                        $onclick_function = '';
+                        if ($is_auction_rules) {
+                            $onclick_function = 'showMultiplayerRules()';
+                        } elseif ($is_welcome) {
+                            $onclick_function = 'showAuctionDetails()';
+                        } elseif ($is_player_pool) {
+                            $onclick_function = 'showPlayerDashboard()';
+                        }
+                    ?>
+                    <div class="player-card" style="cursor: <?php echo $is_clickable ? 'pointer' : 'default'; ?>;" onclick="<?php echo $onclick_function; ?>">
                         <h3><?php echo htmlspecialchars($update['title']); ?></h3>
                         <p style="color: #666; margin-top: 0.5rem;">
                             <?php echo substr(htmlspecialchars($update['content']), 0, 150); ?>...
@@ -172,6 +186,222 @@
             </div>
         </div>
 
+        <!-- Modal for Auction Details -->
+        <div id="auctionDetailsModal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 1000; overflow-y: auto;">
+            <div style="background: white; max-width: 900px; margin: 50px auto; padding: 2rem; border-radius: 12px; position: relative;">
+                <button onclick="closeAuctionDetailsModal()" style="position: absolute; top: 1rem; right: 1rem; background: none; border: none; font-size: 2rem; cursor: pointer; color: #666;">&times;</button>
+                <h2 style="color: #3b82f6; margin-bottom: 1.5rem;">🏆 IPL Auction 2026 - Live Updates</h2>
+                
+                <div style="line-height: 1.8; color: #333;">
+                    <h3 style="color: #1f2937; margin-top: 1.5rem;">🚀 What's New in 2026</h3>
+                    <div style="background: linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%); padding: 1.5rem; border-radius: 10px; margin-bottom: 1.5rem; border-left: 4px solid #3b82f6;">
+                        <ul style="margin: 0; padding-left: 1.5rem;">
+                            <li><strong>Multiplayer Auctions:</strong> Create private rooms and compete with friends in real-time</li>
+                            <li><strong>Smart Timer System:</strong> 15-second countdown with extendable wait option</li>
+                            <li><strong>Dynamic Bidding:</strong> Intelligent bid increments that adapt to price levels</li>
+                            <li><strong>682 Real Players:</strong> Complete IPL 2025 auction player database</li>
+                            <li><strong>Live Leaderboards:</strong> Track your team's progress against competitors</li>
+                        </ul>
+                    </div>
+
+                    <h3 style="color: #1f2937; margin-top: 1.5rem;">🎮 Active Auctions</h3>
+                    <?php
+                    // Get active auction rooms
+                    $active_rooms_sql = "SELECT ar.*, 
+                        (SELECT COUNT(*) FROM room_participants WHERE room_id = ar.room_id) as participants_count,
+                        (SELECT team_name FROM room_participants WHERE room_id = ar.room_id AND is_host = 1) as host_team
+                        FROM auction_rooms ar 
+                        WHERE ar.status IN ('waiting', 'in_progress') 
+                        ORDER BY ar.created_at DESC LIMIT 5";
+                    $conn = getDBConnection();
+                    $active_rooms_result = $conn->query($active_rooms_sql);
+                    
+                    if ($active_rooms_result && $active_rooms_result->num_rows > 0):
+                    ?>
+                        <div style="background: #f9fafb; padding: 1.5rem; border-radius: 10px; margin-bottom: 1.5rem;">
+                            <?php while ($room = $active_rooms_result->fetch_assoc()): ?>
+                                <div style="background: white; padding: 1rem; border-radius: 8px; margin-bottom: 1rem; border: 1px solid #e5e7eb;">
+                                    <div style="display: flex; justify-content: space-between; align-items: center;">
+                                        <div>
+                                            <h4 style="margin: 0 0 0.5rem 0; color: #1f2937;">🎮 <?php echo htmlspecialchars($room['room_name']); ?></h4>
+                                            <p style="margin: 0; font-size: 0.875rem; color: #6b7280;">
+                                                Host: <?php echo htmlspecialchars($room['host_team']); ?> | 
+                                                Players: <?php echo $room['participants_count']; ?>/<?php echo $room['max_participants']; ?> | 
+                                                Code: <strong style="color: #3b82f6;"><?php echo $room['room_code']; ?></strong>
+                                            </p>
+                                        </div>
+                                        <span style="padding: 0.5rem 1rem; border-radius: 6px; font-size: 0.875rem; font-weight: 600; 
+                                            <?php echo $room['status'] == 'in_progress' ? 'background: #dcfce7; color: #166534;' : 'background: #fef3c7; color: #92400e;'; ?>">
+                                            <?php echo $room['status'] == 'in_progress' ? '⚡ Live' : '⏳ Waiting'; ?>
+                                        </span>
+                                    </div>
+                                </div>
+                            <?php endwhile; ?>
+                        </div>
+                    <?php 
+                    else:
+                    ?>
+                        <div style="background: #f9fafb; padding: 1.5rem; border-radius: 10px; margin-bottom: 1.5rem; text-align: center; color: #6b7280;">
+                            <p style="margin: 0;">🔍 No active auctions right now. Be the first to create one!</p>
+                        </div>
+                    <?php 
+                    endif;
+                    closeDBConnection($conn);
+                    ?>
+
+                    <h3 style="color: #1f2937; margin-top: 1.5rem;">📊 Platform Statistics</h3>
+                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem; margin-bottom: 1.5rem;">
+                        <div style="background: linear-gradient(135deg, #f3e8ff 0%, #e9d5ff 100%); padding: 1.5rem; border-radius: 10px; text-align: center;">
+                            <div style="font-size: 2rem; font-weight: bold; color: #6b21a8;"><?php echo $players_count; ?></div>
+                            <div style="color: #6b7280; font-size: 0.875rem; margin-top: 0.25rem;">Total Players</div>
+                        </div>
+                        <div style="background: linear-gradient(135deg, #dbeafe 0%, #bfdbfe 100%); padding: 1.5rem; border-radius: 10px; text-align: center;">
+                            <div style="font-size: 2rem; font-weight: bold; color: #1e40af;"><?php echo $teams_count; ?></div>
+                            <div style="color: #6b7280; font-size: 0.875rem; margin-top: 0.25rem;">Registered Teams</div>
+                        </div>
+                        <div style="background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%); padding: 1.5rem; border-radius: 10px; text-align: center;">
+                            <div style="font-size: 2rem; font-weight: bold; color: #92400e;">₹120 Cr</div>
+                            <div style="color: #6b7280; font-size: 0.875rem; margin-top: 0.25rem;">Budget Per Team</div>
+                        </div>
+                        <div style="background: linear-gradient(135deg, #dcfce7 0%, #bbf7d0 100%); padding: 1.5rem; border-radius: 10px; text-align: center;">
+                            <div style="font-size: 2rem; font-weight: bold; color: #166534;">4 Groups</div>
+                            <div style="color: #6b7280; font-size: 0.875rem; margin-top: 0.25rem;">Player Categories</div>
+                        </div>
+                    </div>
+
+                    <h3 style="color: #1f2937; margin-top: 1.5rem;">✨ Key Features</h3>
+                    <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 1rem;">
+                        <div style="background: #f9fafb; padding: 1rem; border-radius: 8px; border-left: 3px solid #3b82f6;">
+                            <div style="font-weight: 600; color: #1f2937; margin-bottom: 0.25rem;">💰 Smart Budget Management</div>
+                            <div style="font-size: 0.875rem; color: #6b7280;">Real-time budget tracking and validation</div>
+                        </div>
+                        <div style="background: #f9fafb; padding: 1rem; border-radius: 8px; border-left: 3px solid #10b981;">
+                            <div style="font-weight: 600; color: #1f2937; margin-bottom: 0.25rem;">⚡ Live Bidding</div>
+                            <div style="font-size: 0.875rem; color: #6b7280;">Instant updates across all participants</div>
+                        </div>
+                        <div style="background: #f9fafb; padding: 1rem; border-radius: 8px; border-left: 3px solid #f59e0b;">
+                            <div style="font-weight: 600; color: #1f2937; margin-bottom: 0.25rem;">🎯 Strategic Groups</div>
+                            <div style="font-size: 0.875rem; color: #6b7280;">Players divided into A, B, C, D tiers</div>
+                        </div>
+                        <div style="background: #f9fafb; padding: 1rem; border-radius: 8px; border-left: 3px solid #8b5cf6;">
+                            <div style="font-weight: 600; color: #1f2937; margin-bottom: 0.25rem;">📈 Analytics Dashboard</div>
+                            <div style="font-size: 0.875rem; color: #6b7280;">Track your team's composition and spending</div>
+                        </div>
+                    </div>
+
+                    <div style="background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%); color: white; padding: 1.5rem; border-radius: 10px; margin-top: 1.5rem; text-align: center;">
+                        <h4 style="margin: 0 0 0.5rem 0;">🚀 Ready to Start?</h4>
+                        <p style="margin: 0 0 1rem 0; opacity: 0.9;">Create your own auction room or join an existing one with friends!</p>
+                        <div style="display: flex; gap: 1rem; justify-content: center; flex-wrap: wrap;">
+                            <?php if (isLoggedIn()): ?>
+                                <a href="pages/create-auction.php" style="padding: 0.75rem 1.5rem; background: white; color: #3b82f6; text-decoration: none; border-radius: 8px; font-weight: 600;">Create Auction</a>
+                                <a href="pages/join-auction.php" style="padding: 0.75rem 1.5rem; background: rgba(255,255,255,0.2); color: white; text-decoration: none; border-radius: 8px; font-weight: 600; border: 2px solid white;">Join Auction</a>
+                            <?php else: ?>
+                                <a href="auth/login.php" style="padding: 0.75rem 1.5rem; background: white; color: #3b82f6; text-decoration: none; border-radius: 8px; font-weight: 600;">Login to Start</a>
+                            <?php endif; ?>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Modal for Player Dashboard -->
+        <div id="playerDashboardModal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 1000; overflow-y: auto;">
+            <div style="background: white; max-width: 1200px; margin: 50px auto; padding: 2rem; border-radius: 12px; position: relative;">
+                <button onclick="closePlayerDashboard()" style="position: absolute; top: 1rem; right: 1rem; background: none; border: none; font-size: 2rem; cursor: pointer; color: #666;">&times;</button>
+                <h2 style="color: #3b82f6; margin-bottom: 1.5rem;">🏏 Player Pool - Groupwise Distribution</h2>
+                
+                <?php
+                // Get players grouped by auction group
+                $conn = getDBConnection();
+                $groups = ['Marquee', 'A', 'B', 'C', 'D'];
+                ?>
+                
+                <div style="margin-bottom: 1rem;">
+                    <div style="display: flex; gap: 1rem; flex-wrap: wrap; justify-content: center;">
+                        <?php foreach ($groups as $group): ?>
+                            <button onclick="showGroup('<?php echo $group; ?>')" id="btn-<?php echo $group; ?>" 
+                                style="padding: 0.75rem 1.5rem; border: 2px solid #3b82f6; background: white; color: #3b82f6; border-radius: 8px; cursor: pointer; font-weight: 600; transition: all 0.3s;"
+                                onmouseover="this.style.background='#3b82f6'; this.style.color='white';" 
+                                onmouseout="if(!this.classList.contains('active')) { this.style.background='white'; this.style.color='#3b82f6'; }">
+                                Group <?php echo $group; ?>
+                            </button>
+                        <?php endforeach; ?>
+                        <button onclick="showGroup('all')" id="btn-all" 
+                            style="padding: 0.75rem 1.5rem; border: 2px solid #10b981; background: #10b981; color: white; border-radius: 8px; cursor: pointer; font-weight: 600;"
+                            class="active">
+                            All Players
+                        </button>
+                    </div>
+                </div>
+                
+                <?php foreach ($groups as $group): ?>
+                    <?php
+                    $group_sql = "SELECT player_name, player_role, player_type, base_price, age, auction_group 
+                                  FROM players 
+                                  WHERE auction_group = '" . $conn->real_escape_string($group) . "'
+                                  ORDER BY base_price DESC";
+                    $group_result = $conn->query($group_sql);
+                    $player_count = $group_result ? $group_result->num_rows : 0;
+                    
+                    // Get price range for group
+                    $price_ranges = [
+                        'Marquee' => '₹20+ Cr',
+                        'A' => '₹2+ Cr',
+                        'B' => '₹1-2 Cr',
+                        'C' => '₹50L-1Cr',
+                        'D' => '<₹50L'
+                    ];
+                    
+                    $group_colors = [
+                        'Marquee' => ['bg' => '#fef3c7', 'text' => '#92400e', 'icon' => '⭐'],
+                        'A' => ['bg' => '#dbeafe', 'text' => '#1e40af', 'icon' => '💎'],
+                        'B' => ['bg' => '#e9d5ff', 'text' => '#6b21a8', 'icon' => '💰'],
+                        'C' => ['bg' => '#dcfce7', 'text' => '#166534', 'icon' => '🎯'],
+                        'D' => ['bg' => '#f3f4f6', 'text' => '#374151', 'icon' => '🏆']
+                    ];
+                    ?>
+                    
+                    <div id="group-<?php echo $group; ?>" class="group-section" style="display: block;">
+                        <div style="background: <?php echo $group_colors[$group]['bg']; ?>; padding: 1.5rem; border-radius: 10px; margin-bottom: 2rem; border-left: 4px solid <?php echo $group_colors[$group]['text']; ?>;">
+                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+                                <h3 style="margin: 0; color: <?php echo $group_colors[$group]['text']; ?>;">
+                                    <?php echo $group_colors[$group]['icon']; ?> Group <?php echo $group; ?> - <?php echo $price_ranges[$group]; ?>
+                                </h3>
+                                <span style="padding: 0.5rem 1rem; background: white; border-radius: 6px; font-weight: 600; color: <?php echo $group_colors[$group]['text']; ?>;">
+                                    <?php echo $player_count; ?> Players
+                                </span>
+                            </div>
+                            
+                            <?php if ($group_result && $player_count > 0): ?>
+                                <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 1rem;">
+                                    <?php while ($player = $group_result->fetch_assoc()): ?>
+                                        <div style="background: white; padding: 1rem; border-radius: 8px; border: 1px solid rgba(0,0,0,0.1);">
+                                            <div style="font-weight: 600; color: #1f2937; margin-bottom: 0.5rem; font-size: 1rem;">
+                                                🏏 <?php echo htmlspecialchars($player['player_name']); ?>
+                                            </div>
+                                            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem; font-size: 0.875rem; color: #6b7280;">
+                                                <div><strong>Role:</strong> <?php echo htmlspecialchars($player['player_role']); ?></div>
+                                                <div><strong>Type:</strong> <?php echo htmlspecialchars($player['player_type']); ?></div>
+                                                <div><strong>Age:</strong> <?php echo $player['age']; ?> yrs</div>
+                                                <div style="color: <?php echo $group_colors[$group]['text']; ?>; font-weight: 600;">
+                                                    <strong>Base:</strong> ₹<?php echo number_format($player['base_price'] / 10000000, 2); ?> Cr
+                                                </div>
+                                            </div>
+                                        </div>
+                                    <?php endwhile; ?>
+                                </div>
+                            <?php else: ?>
+                                <p style="margin: 1rem 0 0 0; color: #6b7280; text-align: center;">No players in this group</p>
+                            <?php endif; ?>
+                        </div>
+                    </div>
+                <?php endforeach; ?>
+                
+                <?php closeDBConnection($conn); ?>
+            </div>
+        </div>
+
         <!-- Features Section -->
         <div class="card">
             <div class="card-header">
@@ -229,18 +459,81 @@
             document.body.style.overflow = 'auto';
         }
 
-        // Close modal when clicking outside
+        function showAuctionDetails() {
+            document.getElementById('auctionDetailsModal').style.display = 'block';
+            document.body.style.overflow = 'hidden';
+        }
+
+        function closeAuctionDetailsModal() {
+            document.getElementById('auctionDetailsModal').style.display = 'none';
+            document.body.style.overflow = 'auto';
+        }
+
+        function showPlayerDashboard() {
+            document.getElementById('playerDashboardModal').style.display = 'block';
+            document.body.style.overflow = 'hidden';
+            showGroup('all'); // Show all groups by default
+        }
+
+        function closePlayerDashboard() {
+            document.getElementById('playerDashboardModal').style.display = 'none';
+            document.body.style.overflow = 'auto';
+        }
+
+        function showGroup(groupName) {
+            // Get all group sections
+            const sections = document.querySelectorAll('.group-section');
+            const buttons = document.querySelectorAll('[id^="btn-"]');
+            
+            // Remove active class from all buttons
+            buttons.forEach(btn => {
+                btn.classList.remove('active');
+                btn.style.background = 'white';
+                btn.style.color = '#3b82f6';
+            });
+            
+            if (groupName === 'all') {
+                // Show all groups
+                sections.forEach(section => section.style.display = 'block');
+                document.getElementById('btn-all').classList.add('active');
+                document.getElementById('btn-all').style.background = '#10b981';
+                document.getElementById('btn-all').style.color = 'white';
+            } else {
+                // Hide all groups first
+                sections.forEach(section => section.style.display = 'none');
+                // Show only selected group
+                document.getElementById('group-' + groupName).style.display = 'block';
+                // Highlight selected button
+                const selectedBtn = document.getElementById('btn-' + groupName);
+                selectedBtn.classList.add('active');
+                selectedBtn.style.background = '#3b82f6';
+                selectedBtn.style.color = 'white';
+            }
+        }
+
+        // Close modals when clicking outside
         document.addEventListener('click', function(event) {
-            const modal = document.getElementById('rulesModal');
-            if (event.target === modal) {
+            const rulesModal = document.getElementById('rulesModal');
+            const detailsModal = document.getElementById('auctionDetailsModal');
+            const playerModal = document.getElementById('playerDashboardModal');
+            
+            if (event.target === rulesModal) {
                 closeRulesModal();
+            }
+            if (event.target === detailsModal) {
+                closeAuctionDetailsModal();
+            }
+            if (event.target === playerModal) {
+                closePlayerDashboard();
             }
         });
 
-        // Close modal with Escape key
+        // Close modals with Escape key
         document.addEventListener('keydown', function(event) {
             if (event.key === 'Escape') {
                 closeRulesModal();
+                closeAuctionDetailsModal();
+                closePlayerDashboard();
             }
         });
     </script>
