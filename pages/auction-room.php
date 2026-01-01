@@ -111,11 +111,37 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['action'])) {
         
         header('Location: auction-room.php?room_id=' . $room_id);
         exit();
+    } elseif ($_POST['action'] == 'pause' && $is_host) {
+        // Pause the auction - save current state
+        error_log("PAUSE ACTION TRIGGERED by user: " . $current_user['user_id']);
+        pauseAuctionRoom($room_id);
+        error_log("Pause completed, redirecting...");
+        header('Location: auction-room.php?room_id=' . $room_id);
+        exit();
+    } elseif ($_POST['action'] == 'resume' && $is_host) {
+        // Resume the auction from paused state
+        resumeAuctionRoom($room_id);
+        header('Location: auction-room.php?room_id=' . $room_id);
+        exit();
     }
 }
 
 // Reload room data
 $room = getRoomById($room_id);
+
+// Ensure room has a valid status (but don't override 'paused')
+if (empty($room['status']) || $room['status'] == '') {
+    // Set to in_progress if there's a current player
+    if ($room['current_player_id']) {
+        $conn = getDBConnection();
+        $room_id_safe = $conn->real_escape_string($room_id);
+        $conn->query("UPDATE auction_rooms SET status = 'in_progress' WHERE room_id = $room_id_safe AND (status IS NULL OR status = '')");
+        closeDBConnection($conn);
+        $room['status'] = 'in_progress';
+        // Reload to get accurate status
+        $room = getRoomById($room_id);
+    }
+}
 
 // Check for sale notification
 $sale_notification = null;
@@ -138,17 +164,25 @@ if ($room['current_player_id']) {
 // Get time remaining for bid timer and Unix timestamp for JavaScript
 $time_remaining = 45;
 $timer_expires_timestamp = null;
-if ($current_player && ($room['status'] == 'active' || $room['status'] == 'in_progress')) {
-    $time_remaining = getBidTimeRemaining($room_id);
-    
-    // Get Unix timestamp directly from MySQL to avoid timezone issues
-    $conn = getDBConnection();
-    $room_id_escaped = $conn->real_escape_string($room_id);
-    $result = $conn->query("SELECT UNIX_TIMESTAMP(bid_timer_expires_at) as expires_ts FROM auction_rooms WHERE room_id = $room_id_escaped");
-    if ($result && $row = $result->fetch_assoc()) {
-        $timer_expires_timestamp = $row['expires_ts'];
+$paused_time = 0;
+
+if ($current_player) {
+    if ($room['status'] == 'paused') {
+        // Get saved paused time
+        $paused_time = $room['paused_time_remaining'] ?? 45;
+        $time_remaining = $paused_time;
+    } elseif ($room['status'] == 'active' || $room['status'] == 'in_progress') {
+        $time_remaining = getBidTimeRemaining($room_id);
+        
+        // Get Unix timestamp directly from MySQL to avoid timezone issues
+        $conn = getDBConnection();
+        $room_id_escaped = $conn->real_escape_string($room_id);
+        $result = $conn->query("SELECT UNIX_TIMESTAMP(bid_timer_expires_at) as expires_ts FROM auction_rooms WHERE room_id = $room_id_escaped");
+        if ($result && $row = $result->fetch_assoc()) {
+            $timer_expires_timestamp = $row['expires_ts'];
+        }
+        closeDBConnection($conn);
     }
-    closeDBConnection($conn);
 }
 ?>
 <!DOCTYPE html>
@@ -650,6 +684,17 @@ if ($current_player && ($room['status'] == 'active' || $room['status'] == 'in_pr
                     <?php if ($is_host): ?><span style="color: #fbbf24;"> (You)</span><?php endif; ?>
                 </p>
             </div>
+            <?php 
+            // Show stop/restart buttons for host when there's a current player
+            if ($is_host && $current_player): 
+            ?>
+                <form method="POST" style="margin: 0;">
+                    <input type="hidden" name="action" value="<?php echo $room['status'] == 'paused' ? 'resume' : 'pause'; ?>">
+                    <button type="submit" style="padding: 0.75rem 1.5rem; background: <?php echo $room['status'] == 'paused' ? 'linear-gradient(135deg, #34d399, #10b981)' : 'linear-gradient(135deg, #ef4444, #dc2626)'; ?>; color: white; border: none; border-radius: 8px; font-weight: 600; cursor: pointer; transition: all 0.3s; font-size: 1rem; box-shadow: 0 4px 6px rgba(0,0,0,0.3);">
+                        <?php echo $room['status'] == 'paused' ? '▶️ Resume Auction' : '⏸️ Pause Auction'; ?>
+                    </button>
+                </form>
+            <?php endif; ?>
             <div class="room-code-display">
                 <div class="label">Room Code</div>
                 <div class="code"><?php echo htmlspecialchars($room['room_code']); ?></div>
@@ -693,6 +738,37 @@ if ($current_player && ($room['status'] == 'active' || $room['status'] == 'in_pr
                             </form>
                         <?php else: ?>
                             <p style="margin-top: 2rem; color: #fbbf24;">Waiting for host to start...</p>
+                        <?php endif; ?>
+                    </div>
+                    
+                <?php elseif ($room['status'] == 'paused'): ?>
+                    <div class="waiting-state">
+                        <h2>⏸️ Auction Paused</h2>
+                        <div style="font-size: 4rem; margin: 2rem 0;">💾</div>
+                        <p style="color: #94a3b8; font-size: 1.1rem;">Progress saved successfully</p>
+                        <p style="color: #60a5fa; font-size: 1.25rem; margin-top: 1rem;">⏱️ Timer: <?php echo $time_remaining; ?> seconds saved</p>
+                        <p style="color: #666; font-size: 0.85rem; margin-top: 1rem;">DEBUG: is_host=<?php echo $is_host ? 'YES' : 'NO'; ?>, status='<?php echo $room['status']; ?>'</p>
+                        
+                        <?php if ($current_player): ?>
+                            <div style="margin-top: 2rem; padding: 2rem; background: rgba(96, 165, 250, 0.1); border-radius: 12px; border: 2px solid rgba(96, 165, 250, 0.3); max-width: 500px; margin-left: auto; margin-right: auto;">
+                                <div style="color: #94a3b8; font-size: 0.875rem; margin-bottom: 1rem;">📍 Current Player</div>
+                                <div style="color: white; font-size: 1.75rem; font-weight: 700; margin-bottom: 1rem;"><?php echo htmlspecialchars($current_player['player_name']); ?></div>
+                                <div style="color: #60a5fa; font-size: 1.1rem;">💰 Base: ₹<?php echo number_format($current_player['base_price'] / 10000000, 2); ?> Cr</div>
+                                <?php if ($room['current_bid'] > $current_player['base_price']): ?>
+                                    <div style="color: #34d399; font-size: 1.1rem; margin-top: 0.5rem;">🏏 Current Bid: ₹<?php echo number_format($room['current_bid'] / 10000000, 2); ?> Cr</div>
+                                <?php endif; ?>
+                            </div>
+                        <?php endif; ?>
+                        
+                        <?php if ($is_host): ?>
+                            <form method="POST" style="margin-top: 2rem;">
+                                <input type="hidden" name="action" value="resume">
+                                <button type="submit" class="btn-start" style="background: linear-gradient(135deg, #34d399, #10b981); padding: 1.25rem 3rem; font-size: 1.2rem;">
+                                    🔄 Restart Auction
+                                </button>
+                            </form>
+                        <?php else: ?>
+                            <p style="margin-top: 2rem; color: #fbbf24;">Waiting for host to restart...</p>
                         <?php endif; ?>
                     </div>
                     
@@ -1280,6 +1356,44 @@ if ($current_player && ($room['status'] == 'active' || $room['status'] == 'in_pr
             if (timeRemaining > 0) return;
             window.location.reload();
         }, 3000);
+        <?php endif; ?>
+        
+        // Auto-pause when host leaves the auction room
+        <?php if ($is_host && (!empty($room['status']) && $room['status'] != 'waiting' && $room['status'] != 'completed' && $room['status'] != 'paused')): ?>
+        
+        // Use Beacon API for reliable background request
+        function pauseAuction() {
+            const formData = new FormData();
+            formData.append('room_id', '<?php echo $room_id; ?>');
+            
+            console.log('Pausing auction room <?php echo $room_id; ?>');
+            
+            // Try Beacon API first (most reliable)
+            if (navigator.sendBeacon) {
+                const sent = navigator.sendBeacon('pause-beacon.php', formData);
+                console.log('Beacon sent:', sent);
+            } else {
+                // Fallback to synchronous XHR
+                const xhr = new XMLHttpRequest();
+                xhr.open('POST', 'pause-beacon.php', false);
+                xhr.send(formData);
+            }
+        }
+        
+        // Pause on page unload
+        window.addEventListener('beforeunload', pauseAuction);
+        window.addEventListener('pagehide', pauseAuction);
+        
+        // Pause when clicking "Back to My Auctions" link
+        document.addEventListener('DOMContentLoaded', function() {
+            const backLink = document.querySelector('a[href="my-auctions.php"]');
+            if (backLink) {
+                backLink.addEventListener('click', function(e) {
+                    pauseAuction();
+                });
+            }
+        });
+        
         <?php endif; ?>
     </script>
 </body>

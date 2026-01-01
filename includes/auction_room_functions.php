@@ -552,3 +552,58 @@ function getParticipantPlayers($participant_id) {
     closeDBConnection($conn);
     return $players;
 }
+
+// Pause auction room - save current timer state
+function pauseAuctionRoom($room_id) {
+    $conn = getDBConnection();
+    $room_id = $conn->real_escape_string($room_id);
+    
+    error_log("Pausing auction room: $room_id");
+    
+    // Get remaining time before pausing
+    $sql = "SELECT TIMESTAMPDIFF(SECOND, NOW(), bid_timer_expires_at) as seconds_remaining 
+            FROM auction_rooms WHERE room_id = $room_id";
+    $result = $conn->query($sql);
+    $remaining = 45;
+    
+    if ($result && $row = $result->fetch_assoc()) {
+        $remaining = max(0, intval($row['seconds_remaining']));
+        error_log("Remaining seconds: $remaining");
+    }
+    
+    // Save the remaining time and set status to paused
+    $update_sql = "UPDATE auction_rooms 
+                   SET status = 'paused',
+                       paused_time_remaining = $remaining
+                   WHERE room_id = $room_id";
+    
+    $success = $conn->query($update_sql);
+    error_log("Pause update SQL result: " . ($success ? "SUCCESS" : "FAILED - " . $conn->error));
+    error_log("Rows affected: " . $conn->affected_rows);
+    
+    closeDBConnection($conn);
+}
+
+// Resume auction room - restore timer from where it left off
+function resumeAuctionRoom($room_id) {
+    $conn = getDBConnection();
+    $room_id = $conn->real_escape_string($room_id);
+    
+    // Get the saved time remaining
+    $sql = "SELECT paused_time_remaining FROM auction_rooms WHERE room_id = $room_id";
+    $result = $conn->query($sql);
+    $remaining = 45;
+    
+    if ($result && $row = $result->fetch_assoc()) {
+        $remaining = $row['paused_time_remaining'] ?? 45;
+    }
+    
+    // Resume with the saved time
+    $update_sql = "UPDATE auction_rooms 
+                   SET status = 'in_progress',
+                       bid_timer_expires_at = DATE_ADD(NOW(), INTERVAL $remaining SECOND)
+                   WHERE room_id = $room_id";
+    
+    $conn->query($update_sql);
+    closeDBConnection($conn);
+}
