@@ -478,6 +478,38 @@ function getUserRooms($user_id) {
     return $rooms;
 }
 
+// Delete an auction room and related data. Only allow if user_id is the creator.
+function deleteRoom($room_id, $user_id) {
+    $conn = getDBConnection();
+    $room_id_safe = $conn->real_escape_string($room_id);
+    $user_id_safe = $conn->real_escape_string($user_id);
+
+    // Ensure the requester is the creator of the room
+    $check_sql = "SELECT created_by FROM auction_rooms WHERE room_id = $room_id_safe";
+    $result = $conn->query($check_sql);
+    if (!$result || $result->num_rows == 0) {
+        closeDBConnection($conn);
+        return ['success' => false, 'message' => 'Room not found'];
+    }
+    $row = $result->fetch_assoc();
+    if ($row['created_by'] != $user_id_safe) {
+        closeDBConnection($conn);
+        return ['success' => false, 'message' => 'Not authorized'];
+    }
+
+    // Delete the room. Foreign keys with ON DELETE CASCADE will remove related rows.
+    $del_sql = "DELETE FROM auction_rooms WHERE room_id = $room_id_safe";
+    $success = $conn->query($del_sql);
+    if ($success) {
+        closeDBConnection($conn);
+        return ['success' => true];
+    } else {
+        $err = $conn->error;
+        closeDBConnection($conn);
+        return ['success' => false, 'message' => $err];
+    }
+}
+
 // Reset bid timer (when new bid is placed)
 function resetBidTimer($room_id) {
     $conn = getDBConnection();

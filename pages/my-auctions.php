@@ -5,6 +5,18 @@ require_once '../includes/auction_room_functions.php';
 requireLogin();
 
 $current_user = getCurrentUser();
+// Handle delete request
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['action'] === 'delete_room') {
+    $room_id_to_delete = intval($_POST['room_id'] ?? 0);
+    $res = deleteRoom($room_id_to_delete, $current_user['user_id']);
+    if ($res['success']) {
+        header('Location: my-auctions.php');
+        exit();
+    } else {
+        $error = $res['message'];
+    }
+}
+
 $rooms = getUserRooms($current_user['user_id']);
 ?>
 <!DOCTYPE html>
@@ -281,6 +293,11 @@ $rooms = getUserRooms($current_user['user_id']);
                             <a href="auction-room.php?room_id=<?php echo $room['room_id']; ?>" class="btn-enter">
                                 <?php echo $room['status'] == 'waiting' ? 'Enter Waiting Room' : 'Enter Auction'; ?>
                             </a>
+                            <form method="POST" style="margin:0;">
+                                <input type="hidden" name="action" value="delete_room">
+                                <input type="hidden" name="room_id" value="<?php echo $room['room_id']; ?>">
+                                <button type="submit" class="btn" style="background: linear-gradient(135deg, #ef4444, #dc2626); color: white; border-radius:10px; padding:0.8rem 1rem;" onclick="return confirm('Are you sure you want to delete this auction room? This cannot be undone.');">🗑️ Delete</button>
+                            </form>
                         </div>
                     </div>
                 <?php endforeach; ?>
