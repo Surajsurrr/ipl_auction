@@ -153,6 +153,17 @@ function getRoomParticipants($room_id) {
     return $participants;
 }
 
+// Get participant by id
+function getParticipantById($participant_id) {
+    $conn = getDBConnection();
+    $pid = $conn->real_escape_string($participant_id);
+    $sql = "SELECT rp.*, u.username, u.full_name FROM room_participants rp JOIN users u ON rp.user_id = u.user_id WHERE rp.participant_id = $pid";
+    $result = $conn->query($sql);
+    $row = $result ? $result->fetch_assoc() : null;
+    closeDBConnection($conn);
+    return $row;
+}
+
 // Check if user is in room
 function isUserInRoom($room_id, $user_id) {
     $conn = getDBConnection();
@@ -202,38 +213,70 @@ function startAuctionRoom($room_id, $user_id) {
     }
 }
 
-// Get next player for room
+// Get next player for room (follows group order: Marquee -> A -> B -> C)
 function getNextPlayerForRoom($room_id, $group = null) {
     $conn = getDBConnection();
     $room_id = $conn->real_escape_string($room_id);
     
-    // Get players not yet used in this room
+    // Get current auction group
+    $room_sql = "SELECT current_auction_group FROM auction_rooms WHERE room_id = $room_id";
+    $room_result = $conn->query($room_sql);
+    $room_data = $room_result ? $room_result->fetch_assoc() : null;
+    $current_group = $room_data['current_auction_group'] ?? 'Marquee';
+    
+    // Define group order
+    $group_order = ['Marquee', 'A', 'B', 'C'];
+    
+    // Try to get a player from current group
     $sql = "SELECT p.* FROM players p
             WHERE p.player_id NOT IN (
                 SELECT player_id FROM room_used_players WHERE room_id = $room_id
-            )";
-    
-    if ($group) {
-        $group = $conn->real_escape_string($group);
-        $sql .= " AND p.auction_group = '$group'";
-    }
-    
-    $sql .= " ORDER BY RAND() LIMIT 1";
+            )
+            AND p.auction_group = '$current_group'
+            ORDER BY RAND() LIMIT 1";
     
     $result = $conn->query($sql);
     $player = $result ? $result->fetch_assoc() : null;
+    
+    // If no player found in current group, move to next group
+    if (!$player) {
+        $current_index = array_search($current_group, $group_order);
+        $next_index = $current_index + 1;
+        
+        // Try next groups in order
+        while ($next_index < count($group_order) && !$player) {
+            $next_group = $group_order[$next_index];
+            
+            $sql = "SELECT p.* FROM players p
+                    WHERE p.player_id NOT IN (
+                        SELECT player_id FROM room_used_players WHERE room_id = $room_id
+                    )
+                    AND p.auction_group = '$next_group'
+                    ORDER BY RAND() LIMIT 1";
+            
+            $result = $conn->query($sql);
+            $player = $result ? $result->fetch_assoc() : null;
+            
+            if ($player) {
+                $current_group = $next_group;
+                break;
+            }
+            $next_index++;
+        }
+    }
     
     if ($player) {
         // Mark as used
         $insert_sql = "INSERT INTO room_used_players (room_id, player_id) VALUES ($room_id, {$player['player_id']})";
         $conn->query($insert_sql);
         
-        // Set as current player and initialize timer (15 seconds from now)
+        // Set as current player and initialize timer, update current group
         $update_sql = "UPDATE auction_rooms 
                        SET current_player_id = {$player['player_id']}, 
                            current_bid = {$player['base_price']}, 
                            current_bidder_id = NULL,
-                           bid_timer_expires_at = DATE_ADD(NOW(), INTERVAL 15 SECOND)
+                           bid_timer_expires_at = DATE_ADD(NOW(), INTERVAL 45 SECOND),
+                           current_auction_group = '$current_group'
                        WHERE room_id = $room_id";
         $conn->query($update_sql);
     }
@@ -265,13 +308,48 @@ function placeBidInRoom($room_id, $participant_id, $bid_amount) {
     }
     
     // Get current room info
-    $room_sql = "SELECT current_player_id, current_bid FROM auction_rooms WHERE room_id = $room_id";
+    $room_sql = "SELECT current_player_id, current_bid, bidding_war_player1_id, bidding_war_player2_id FROM auction_rooms WHERE room_id = $room_id";
     $room_result = $conn->query($room_sql);
     $room = $room_result->fetch_assoc();
     
     if ($bid_amount <= $room['current_bid']) {
         closeDBConnection($conn);
         return ['success' => false, 'message' => 'Bid must be higher than current bid'];
+    }
+    
+    // Check bidding war lock
+    $player1 = $room['bidding_war_player1_id'];
+    $player2 = $room['bidding_war_player2_id'];
+    
+    // If both players are locked, only they can bid
+    if ($player1 && $player2) {
+        if ($participant_id != $player1 && $participant_id != $player2) {
+            closeDBConnection($conn);
+            return ['success' => false, 'message' => 'Bidding locked between two players'];
+        }
+    }
+    
+    // Update bidding war tracking
+    if (!$player1) {
+        // First bidder
+        $player1 = $participant_id;
+        $player1_bid = $bid_amount;
+        $update_war = "UPDATE auction_rooms SET bidding_war_player1_id = $player1, bidding_war_player1_bid = $player1_bid WHERE room_id = $room_id";
+        $conn->query($update_war);
+    } elseif (!$player2 && $participant_id != $player1) {
+        // Second bidder (different from first) - lock established
+        $player2 = $participant_id;
+        $player2_bid = $bid_amount;
+        $update_war = "UPDATE auction_rooms SET bidding_war_player2_id = $player2, bidding_war_player2_bid = $player2_bid WHERE room_id = $room_id";
+        $conn->query($update_war);
+    } elseif ($participant_id == $player1) {
+        // Player 1 bidding again
+        $update_war = "UPDATE auction_rooms SET bidding_war_player1_bid = $bid_amount WHERE room_id = $room_id";
+        $conn->query($update_war);
+    } elseif ($participant_id == $player2) {
+        // Player 2 bidding again
+        $update_war = "UPDATE auction_rooms SET bidding_war_player2_bid = $bid_amount WHERE room_id = $room_id";
+        $conn->query($update_war);
     }
     
     // Update room current bid
@@ -304,29 +382,47 @@ function finalizePlayerInRoom($room_id) {
     $room = $result->fetch_assoc();
     
     if ($room['current_bidder_id']) {
-        // Assign player to bidder
+        // Player SOLD - Assign player to the highest bidder
         $assign_sql = "INSERT INTO room_player_assignments (room_id, participant_id, player_id, sold_price) 
                        VALUES ($room_id, {$room['current_bidder_id']}, {$room['current_player_id']}, {$room['current_bid']})";
         $conn->query($assign_sql);
-        
+
         // Update participant budget and count
         $update_sql = "UPDATE room_participants 
                        SET remaining_budget = remaining_budget - {$room['current_bid']},
                            players_count = players_count + 1
                        WHERE participant_id = {$room['current_bidder_id']}";
         $conn->query($update_sql);
-        
+
         // Mark player as sold in room
         $mark_sql = "UPDATE room_used_players SET is_sold = TRUE 
                      WHERE room_id = $room_id AND player_id = {$room['current_player_id']}";
         $conn->query($mark_sql);
+    } else {
+        // Player UNSOLD - No bids received, mark as unsold
+        $mark_sql = "UPDATE room_used_players SET is_sold = FALSE 
+                     WHERE room_id = $room_id AND player_id = {$room['current_player_id']}";
+        $conn->query($mark_sql);
     }
-    
-    // Clear current player
-    $clear_sql = "UPDATE auction_rooms SET current_player_id = NULL, current_bid = NULL, current_bidder_id = NULL WHERE room_id = $room_id";
+
+    // Clear current player and reset timer and bidding war
+    $clear_sql = "UPDATE auction_rooms 
+                  SET current_player_id = NULL, 
+                      current_bid = NULL, 
+                      current_bidder_id = NULL,
+                      bid_timer_expires_at = NULL,
+                      bidding_war_player1_id = NULL,
+                      bidding_war_player2_id = NULL,
+                      bidding_war_player1_bid = NULL,
+                      bidding_war_player2_bid = NULL
+                  WHERE room_id = $room_id";
     $conn->query($clear_sql);
-    
+
     closeDBConnection($conn);
+
+    // Automatically get next player
+    getNextPlayerForRoom($room_id, null);
+
     return ['success' => true];
 }
 
@@ -362,7 +458,7 @@ function resetBidTimer($room_id) {
     $conn = getDBConnection();
     $room_id = $conn->real_escape_string($room_id);
     
-    $sql = "UPDATE auction_rooms SET bid_timer_expires_at = DATE_ADD(NOW(), INTERVAL 15 SECOND) 
+    $sql = "UPDATE auction_rooms SET bid_timer_expires_at = DATE_ADD(NOW(), INTERVAL 45 SECOND) 
             WHERE room_id = $room_id";
     $conn->query($sql);
     
@@ -383,6 +479,37 @@ function extendBidTimer($room_id, $seconds = 10) {
     closeDBConnection($conn);
 }
 
+// Release player from bidding war
+function releaseFromBiddingWar($room_id, $participant_id) {
+    $conn = getDBConnection();
+    $room_id = $conn->real_escape_string($room_id);
+    $participant_id = $conn->real_escape_string($participant_id);
+    
+    // Get current bidding war state
+    $sql = "SELECT bidding_war_player1_id, bidding_war_player2_id FROM auction_rooms WHERE room_id = $room_id";
+    $result = $conn->query($sql);
+    $room = $result->fetch_assoc();
+    
+    if ($participant_id == $room['bidding_war_player1_id']) {
+        // Remove player 1
+        $update_sql = "UPDATE auction_rooms 
+                       SET bidding_war_player1_id = NULL, 
+                           bidding_war_player1_bid = NULL 
+                       WHERE room_id = $room_id";
+        $conn->query($update_sql);
+    } elseif ($participant_id == $room['bidding_war_player2_id']) {
+        // Remove player 2
+        $update_sql = "UPDATE auction_rooms 
+                       SET bidding_war_player2_id = NULL, 
+                           bidding_war_player2_bid = NULL 
+                       WHERE room_id = $room_id";
+        $conn->query($update_sql);
+    }
+    
+    closeDBConnection($conn);
+    return ['success' => true];
+}
+
 // Get remaining time for current bid
 function getBidTimeRemaining($room_id) {
     $conn = getDBConnection();
@@ -399,6 +526,29 @@ function getBidTimeRemaining($room_id) {
     }
     
     closeDBConnection($conn);
-    return 15; // Default 15 seconds
+    return 45; // Default 45 seconds
 }
-?>
+
+// Get players bought by a participant
+function getParticipantPlayers($participant_id) {
+    $conn = getDBConnection();
+    $participant_id = $conn->real_escape_string($participant_id);
+    
+    $sql = "SELECT p.*, rpa.sold_price 
+            FROM room_player_assignments rpa
+            JOIN players p ON rpa.player_id = p.player_id
+            WHERE rpa.participant_id = $participant_id
+            ORDER BY rpa.sold_at DESC";
+    
+    $result = $conn->query($sql);
+    $players = [];
+    
+    if ($result) {
+        while ($row = $result->fetch_assoc()) {
+            $players[] = $row;
+        }
+    }
+    
+    closeDBConnection($conn);
+    return $players;
+}
