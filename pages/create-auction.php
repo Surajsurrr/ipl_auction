@@ -10,6 +10,20 @@ $room_code = '';
 $room_id = '';
 $error = '';
 
+// Predefined teams (display name => code)
+$teams = [
+    'Mumbai Indians' => 'mi',
+    'Chennai Super Kings' => 'csk',
+    'Royal Challengers Bangalore' => 'rcb',
+    'Kolkata Knight Riders' => 'kkr',
+    'Lucknow Super Giants' => 'lsg',
+    'Gujarat Titans' => 'gt',
+    'Rajasthan Royals' => 'rr',
+    'Punjab Kings' => 'pbks',
+    'Delhi Capitals' => 'dc',
+    'Sunrisers Hyderabad' => 'srh'
+];
+
 if ($_SERVER['REQUEST_METHOD'] == 'POST') {
     $room_name = $_POST['room_name'] ?? '';
     $max_participants = intval($_POST['max_participants'] ?? 10);
@@ -84,6 +98,11 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
             color: white;
             font-size: 1rem;
             transition: all 0.3s;
+        }
+        /* Set select option text to black */
+        .form-group select option {
+            color: #000000;
+            background: #ffffff;
         }
         .form-group input:focus,
         .form-group select:focus {
@@ -225,9 +244,14 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
                     </div>
                     
                     <div class="form-group">
-                        <label for="team_name">Your Team Name *</label>
-                        <input type="text" id="team_name" name="team_name" required value="<?php echo htmlspecialchars($current_user['username']); ?>'s Team">
-                        <small>What will your team be called?</small>
+                        <label for="team_name">Select Your Team *</label>
+                        <select id="team_name" name="team_name" required>
+                            <option value="">-- Choose a team --</option>
+                            <?php foreach ($teams as $display => $code): ?>
+                                <option value="<?php echo htmlspecialchars($display); ?>"><?php echo htmlspecialchars($display); ?></option>
+                            <?php endforeach; ?>
+                        </select>
+                        <small>Choose one of the 10 official teams for your entry.</small>
                     </div>
                     
                     <div class="form-group">

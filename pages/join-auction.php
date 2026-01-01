@@ -10,6 +10,20 @@ $room = null;
 $error = '';
 $success = false;
 
+// Predefined teams (display name => code)
+$teams = [
+    'Mumbai Indians' => 'mi',
+    'Chennai Super Kings' => 'csk',
+    'Royal Challengers Bangalore' => 'rcb',
+    'Kolkata Knight Riders' => 'kkr',
+    'Lucknow Super Giants' => 'lsg',
+    'Gujarat Titans' => 'gt',
+    'Rajasthan Royals' => 'rr',
+    'Punjab Kings' => 'pbks',
+    'Delhi Capitals' => 'dc',
+    'Sunrisers Hyderabad' => 'srh'
+];
+
 if ($room_code) {
     $room = getRoomByCode($room_code);
 }
@@ -83,6 +97,21 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['action']) && $_POST['a
             text-transform: uppercase;
             letter-spacing: 0.2em;
             transition: all 0.3s;
+        }
+        .form-group select {
+            width: 100%;
+            padding: 0.875rem;
+            border: 2px solid rgba(255, 255, 255, 0.1);
+            border-radius: 10px;
+            background: rgba(255, 255, 255, 0.05);
+            color: #000000;
+            font-size: 1rem;
+            transition: all 0.3s;
+        }
+        /* Attempt to style option text color (may be limited by browser) */
+        .form-group select option {
+            color: #000000;
+            background: #ffffff;
         }
         .form-group input:focus {
             outline: none;
@@ -227,8 +256,13 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['action']) && $_POST['a
                         <input type="hidden" name="room_code" value="<?php echo htmlspecialchars($room_code); ?>">
                         
                         <div class="form-group">
-                            <label for="team_name">Your Team Name</label>
-                            <input type="text" id="team_name" name="team_name" required value="<?php echo htmlspecialchars($current_user['username']); ?>'s Team">
+                            <label for="team_name">Select Your Team</label>
+                            <select id="team_name" name="team_name" required style="padding:0.75rem; border-radius:8px; background: rgba(255,255,255,0.04); color: white; width:100%;">
+                                <option value="">-- Choose a team --</option>
+                                <?php foreach ($teams as $display => $code): ?>
+                                    <option value="<?php echo htmlspecialchars($display); ?>"><?php echo htmlspecialchars($display); ?></option>
+                                <?php endforeach; ?>
+                            </select>
                         </div>
                         
                         <button type="submit" class="btn-join">Join Auction Room</button>

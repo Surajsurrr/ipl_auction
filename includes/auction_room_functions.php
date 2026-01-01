@@ -2,6 +2,22 @@
 require_once __DIR__ . '/../config/database.php';
 require_once __DIR__ . '/../config/session.php';
 
+// Allowed teams for participants
+function getAllowedTeams() {
+    return [
+        'Mumbai Indians',
+        'Chennai Super Kings',
+        'Royal Challengers Bangalore',
+        'Kolkata Knight Riders',
+        'Lucknow Super Giants',
+        'Gujarat Titans',
+        'Rajasthan Royals',
+        'Punjab Kings',
+        'Delhi Capitals',
+        'Sunrisers Hyderabad'
+    ];
+}
+
 // Generate unique room code
 function generateRoomCode() {
     $characters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
@@ -44,6 +60,15 @@ function joinAuctionRoom($room_code, $user_id, $team_name) {
     $conn = getDBConnection();
     $room_code = $conn->real_escape_string($room_code);
     $user_id = $conn->real_escape_string($user_id);
+    $team_name = trim($team_name);
+
+    // Validate team name against allowed list
+    $allowed = getAllowedTeams();
+    if (!in_array($team_name, $allowed)) {
+        closeDBConnection($conn);
+        return ['success' => false, 'message' => 'Invalid team selected'];
+    }
+
     $team_name = $conn->real_escape_string($team_name);
     
     // Check if room exists
