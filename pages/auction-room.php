@@ -106,6 +106,9 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['action'])) {
             'is_sold' => $room['current_bidder_id'] ? true : false
         ];
         
+        // Set flag to announce next player
+        $_SESSION['announce_next_player'] = true;
+        
         header('Location: auction-room.php?room_id=' . $room_id);
         exit();
     }
@@ -119,6 +122,12 @@ $sale_notification = null;
 if (isset($_SESSION['sale_notification'])) {
     $sale_notification = $_SESSION['sale_notification'];
     unset($_SESSION['sale_notification']);
+}
+
+// Check for next player announcement
+$announce_next = isset($_SESSION['announce_next_player']);
+if ($announce_next) {
+    unset($_SESSION['announce_next_player']);
 }
 
 $current_player = null;
@@ -872,129 +881,9 @@ if ($current_player && $room['status'] == 'active') {
     </div>
 
     <script>
-        // Sale notification data
-        const saleNotification = <?php echo $sale_notification ? json_encode($sale_notification) : 'null'; ?>;
-        
-        // Show sale notification if exists
-        if (saleNotification) {
-            showSaleNotification(saleNotification);
-        }
-        
-        function showSaleNotification(data) {
-            const isSold = data.is_sold;
-            const status = isSold ? 'SOLD' : 'UNSOLD';
-            const statusClass = isSold ? 'sold' : 'unsold';
-            
-            let detailsHTML = '';
-            if (isSold) {
-                detailsHTML = `
-                    <div class="sale-team">🎯 ${data.team_name}</div>
-                    <div class="sale-price">₹${(data.sold_price / 10000000).toFixed(2)} Cr</div>
-                    <div class="sale-details">Base Price: ₹${(data.base_price / 10000000).toFixed(2)} Cr</div>
-                `;
-            } else {
-                detailsHTML = `
-                    <div class="sale-details">Base Price: ₹${(data.base_price / 10000000).toFixed(2)} Cr</div>
-                    <div class="sale-details" style="margin-top: 1rem; color: #64748b;">No bids received</div>
-                `;
-            }
-            
-            const notificationHTML = `
-                <div class="sale-notification" id="saleNotification">
-                    <div class="sale-notification-content ${statusClass}">
-                        <div class="sale-status ${statusClass}">${status}!</div>
-                        <div class="sale-player-name">🏏 ${data.player_name}</div>
-                        <div class="sale-details">${data.player_type}</div>
-                        ${detailsHTML}
-                    </div>
-                </div>
-            `;
-            
-            document.body.insertAdjacentHTML('beforeend', notificationHTML);
-            
-            // Play sound using multiple methods for better compatibility
-            playSaleSound(status, isSold);
-            
-            // Auto-dismiss after 5 seconds
-            setTimeout(() => {
-                const notification = document.getElementById('saleNotification');
-                if (notification) {
-                    notification.style.animation = 'fadeOut 0.3s';
-                    setTimeout(() => notification.remove(), 300);
-                }
-            }, 4000);
-            
-            // Click to dismiss
-            document.getElementById('saleNotification').onclick = function() {
-                this.style.animation = 'fadeOut 0.3s';
-                setTimeout(() => this.remove(), 300);
-            };
-        }
-        
-        // Play sale sound with multiple methods
-        function playSaleSound(text, isSold) {
-            console.log('Playing sound:', text);
-            
-            // Method 1: Web Speech API (text-to-speech)
-            if ('speechSynthesis' in window) {
-                // Cancel any ongoing speech
-                window.speechSynthesis.cancel();
-                
-                // Wait a bit for cancellation
-                setTimeout(() => {
-                    const utterance = new SpeechSynthesisUtterance(text);
-                    utterance.rate = 0.8;
-                    utterance.pitch = 1.3;
-                    utterance.volume = 1.0;
-                    utterance.lang = 'en-US';
-                    
-                    utterance.onerror = function(event) {
-                        console.error('Speech synthesis error:', event);
-                        playBeepSound(isSold);
-                    };
-                    
-                    utterance.onstart = function() {
-                        console.log('Speech started');
-                    };
-                    
-                    window.speechSynthesis.speak(utterance);
-                }, 100);
-            } else {
-                console.log('Speech synthesis not supported, playing beep');
-                playBeepSound(isSold);
-            }
-            
-            // Also play beep as backup
-            setTimeout(() => playBeepSound(isSold), 200);
-        }
-        
-        // Fallback beep sound using Web Audio API
-        function playBeepSound(isSold) {
-            try {
-                const audioContext = new (window.AudioContext || window.webkitAudioContext)();
-                const oscillator = audioContext.createOscillator();
-                const gainNode = audioContext.createGain();
-                
-                oscillator.connect(gainNode);
-                gainNode.connect(audioContext.destination);
-                
-                // Different frequency for sold vs unsold
-                oscillator.frequency.value = isSold ? 800 : 400;
-                oscillator.type = 'sine';
-                
-                gainNode.gain.setValueAtTime(0.3, audioContext.currentTime);
-                gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.5);
-                
-                oscillator.start(audioContext.currentTime);
-                oscillator.stop(audioContext.currentTime + 0.5);
-                
-                console.log('Beep sound played');
-            } catch (e) {
-                console.error('Error playing beep:', e);
-            }
-        }
-        
-        // Participant details modal - MUST BE IN GLOBAL SCOPE
+        // ============================================================================
+        // PARTICIPANT DETAILS MODAL - MUST BE DEFINED FIRST (called by inline onclick)
+        // ============================================================================
         const participantsData = <?php echo json_encode($participants); ?>;
         const totalBudget = <?php echo $room['total_budget_per_team']; ?>;
         
@@ -1110,6 +999,170 @@ if ($current_player && $room['status'] == 'active') {
         function closeModal() {
             const modal = document.getElementById('participantModal');
             if (modal) modal.remove();
+        }
+        
+        // ============================================================================
+        // SALE NOTIFICATIONS & ANNOUNCEMENTS
+        // ============================================================================
+        const saleNotification = <?php echo $sale_notification ? json_encode($sale_notification) : 'null'; ?>;
+        const shouldAnnounceNext = <?php echo $announce_next ? 'true' : 'false'; ?>;
+        
+        // Show sale notification if exists
+        if (saleNotification) {
+            showSaleNotification(saleNotification);
+        }
+        
+        // Announce next player after sale notification
+        if (shouldAnnounceNext && saleNotification) {
+            setTimeout(() => {
+                speakNextPlayer();
+            }, 5000); // After sale notification auto-dismisses
+        } else if (shouldAnnounceNext && !saleNotification) {
+            // If no sale notification, announce immediately
+            setTimeout(() => {
+                speakNextPlayer();
+            }, 500);
+        }
+        
+        function speakNextPlayer() {
+            console.log('Announcing next player');
+            
+            // Play "Next Player" speech
+            if ('speechSynthesis' in window) {
+                window.speechSynthesis.cancel();
+                
+                setTimeout(() => {
+                    const utterance = new SpeechSynthesisUtterance('Next Player');
+                    utterance.rate = 0.9;
+                    utterance.pitch = 1.2;
+                    utterance.volume = 1.0;
+                    utterance.lang = 'en-US';
+                    
+                    utterance.onstart = function() {
+                        console.log('Next player announcement started');
+                    };
+                    
+                    utterance.onerror = function(event) {
+                        console.error('Next player announcement error:', event);
+                    };
+                    
+                    window.speechSynthesis.speak(utterance);
+                }, 100);
+            }
+        }
+        
+        function showSaleNotification(data) {
+            const isSold = data.is_sold;
+            const status = isSold ? 'SOLD' : 'UNSOLD';
+            const statusClass = isSold ? 'sold' : 'unsold';
+            
+            let detailsHTML = '';
+            if (isSold) {
+                detailsHTML = `
+                    <div class="sale-team">🎯 ${data.team_name}</div>
+                    <div class="sale-price">₹${(data.sold_price / 10000000).toFixed(2)} Cr</div>
+                    <div class="sale-details">Base Price: ₹${(data.base_price / 10000000).toFixed(2)} Cr</div>
+                `;
+            } else {
+                detailsHTML = `
+                    <div class="sale-details">Base Price: ₹${(data.base_price / 10000000).toFixed(2)} Cr</div>
+                    <div class="sale-details" style="margin-top: 1rem; color: #64748b;">No bids received</div>
+                `;
+            }
+            
+            const notificationHTML = `
+                <div class="sale-notification" id="saleNotification">
+                    <div class="sale-notification-content ${statusClass}">
+                        <div class="sale-status ${statusClass}">${status}!</div>
+                        <div class="sale-player-name">🏏 ${data.player_name}</div>
+                        <div class="sale-details">${data.player_type}</div>
+                        ${detailsHTML}
+                    </div>
+                </div>
+            `;
+            
+            document.body.insertAdjacentHTML('beforeend', notificationHTML);
+            
+            // Play sound using multiple methods for better compatibility
+            playSaleSound(status, isSold);
+            
+            // Auto-dismiss after 5 seconds
+            setTimeout(() => {
+                const notification = document.getElementById('saleNotification');
+                if (notification) {
+                    notification.style.animation = 'fadeOut 0.3s';
+                    setTimeout(() => notification.remove(), 300);
+                }
+            }, 4000);
+            
+            // Click to dismiss
+            document.getElementById('saleNotification').onclick = function() {
+                this.style.animation = 'fadeOut 0.3s';
+                setTimeout(() => this.remove(), 300);
+            };
+        }
+        
+        // Play sale sound with multiple methods
+        function playSaleSound(text, isSold) {
+            console.log('Playing sound:', text);
+            
+            // Method 1: Web Speech API (text-to-speech)
+            if ('speechSynthesis' in window) {
+                // Cancel any ongoing speech
+                window.speechSynthesis.cancel();
+                
+                // Wait a bit for cancellation
+                setTimeout(() => {
+                    const utterance = new SpeechSynthesisUtterance(text);
+                    utterance.rate = 0.8;
+                    utterance.pitch = 1.3;
+                    utterance.volume = 1.0;
+                    utterance.lang = 'en-US';
+                    
+                    utterance.onerror = function(event) {
+                        console.error('Speech synthesis error:', event);
+                        playBeepSound(isSold);
+                    };
+                    
+                    utterance.onstart = function() {
+                        console.log('Speech started');
+                    };
+                    
+                    window.speechSynthesis.speak(utterance);
+                }, 100);
+            } else {
+                console.log('Speech synthesis not supported, playing beep');
+                playBeepSound(isSold);
+            }
+            
+            // Also play beep as backup
+            setTimeout(() => playBeepSound(isSold), 200);
+        }
+        
+        // Fallback beep sound using Web Audio API
+        function playBeepSound(isSold) {
+            try {
+                const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                const oscillator = audioContext.createOscillator();
+                const gainNode = audioContext.createGain();
+                
+                oscillator.connect(gainNode);
+                gainNode.connect(audioContext.destination);
+                
+                // Different frequency for sold vs unsold
+                oscillator.frequency.value = isSold ? 800 : 400;
+                oscillator.type = 'sine';
+                
+                gainNode.gain.setValueAtTime(0.3, audioContext.currentTime);
+                gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.5);
+                
+                oscillator.start(audioContext.currentTime);
+                oscillator.stop(audioContext.currentTime + 0.5);
+                
+                console.log('Beep sound played');
+            } catch (e) {
+                console.error('Error playing beep:', e);
+            }
         }
         
         // Bid Timer - Debug info
