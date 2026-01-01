@@ -87,7 +87,25 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['action'])) {
         exit();
     } elseif ($_POST['action'] == 'finalize') {
         // Any participant can trigger finalization when timer expires
+        // Get current player info before finalizing
+        $sale_player = getPlayerById($room['current_player_id']);
+        $sale_bidder = null;
+        if ($room['current_bidder_id']) {
+            $sale_bidder = getParticipantById($room['current_bidder_id']);
+        }
+        
         finalizePlayerInRoom($room_id);
+        
+        // Store sale notification in session
+        $_SESSION['sale_notification'] = [
+            'player_name' => $sale_player['player_name'],
+            'player_type' => $sale_player['player_type'],
+            'base_price' => $sale_player['base_price'],
+            'sold_price' => $room['current_bid'],
+            'team_name' => $sale_bidder ? $sale_bidder['team_name'] : null,
+            'is_sold' => $room['current_bidder_id'] ? true : false
+        ];
+        
         header('Location: auction-room.php?room_id=' . $room_id);
         exit();
     }
@@ -95,6 +113,14 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['action'])) {
 
 // Reload room data
 $room = getRoomById($room_id);
+
+// Check for sale notification
+$sale_notification = null;
+if (isset($_SESSION['sale_notification'])) {
+    $sale_notification = $_SESSION['sale_notification'];
+    unset($_SESSION['sale_notification']);
+}
+
 $current_player = null;
 if ($room['current_player_id']) {
     $current_player = getPlayerById($room['current_player_id']);
@@ -501,6 +527,88 @@ if ($current_player && $room['status'] == 'active') {
             color: #60a5fa;
             font-weight: 600;
         }
+        
+        /* Sale Notification Modal */
+        .sale-notification {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.95);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 2000;
+            animation: fadeIn 0.3s;
+        }
+        .sale-notification-content {
+            background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%);
+            padding: 3rem;
+            border-radius: 20px;
+            text-align: center;
+            max-width: 600px;
+            width: 90%;
+            animation: scaleIn 0.5s;
+        }
+        .sale-notification-content.sold {
+            border: 4px solid #34d399;
+            box-shadow: 0 0 50px rgba(52, 211, 153, 0.5);
+        }
+        .sale-notification-content.unsold {
+            border: 4px solid #ef4444;
+            box-shadow: 0 0 50px rgba(239, 68, 68, 0.5);
+        }
+        .sale-status {
+            font-size: 4rem;
+            font-weight: 900;
+            margin-bottom: 1.5rem;
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+        }
+        .sale-status.sold {
+            color: #34d399;
+            text-shadow: 0 0 20px rgba(52, 211, 153, 0.8);
+        }
+        .sale-status.unsold {
+            color: #ef4444;
+            text-shadow: 0 0 20px rgba(239, 68, 68, 0.8);
+        }
+        .sale-player-name {
+            font-size: 2.5rem;
+            color: white;
+            margin-bottom: 1rem;
+            font-weight: 700;
+        }
+        .sale-details {
+            font-size: 1.25rem;
+            color: #94a3b8;
+            margin: 0.5rem 0;
+        }
+        .sale-price {
+            font-size: 2rem;
+            color: #fbbf24;
+            font-weight: 800;
+            margin: 1rem 0;
+        }
+        .sale-team {
+            font-size: 1.75rem;
+            color: #60a5fa;
+            font-weight: 700;
+            margin-top: 1.5rem;
+        }
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+        @keyframes fadeOut {
+            from { opacity: 1; }
+            to { opacity: 0; }
+        }
+        @keyframes scaleIn {
+            from { transform: scale(0.5); opacity: 0; }
+            to { transform: scale(1); opacity: 1; }
+        }
     </style>
 </head>
 <body>
@@ -764,6 +872,128 @@ if ($current_player && $room['status'] == 'active') {
     </div>
 
     <script>
+        // Sale notification data
+        const saleNotification = <?php echo $sale_notification ? json_encode($sale_notification) : 'null'; ?>;
+        
+        // Show sale notification if exists
+        if (saleNotification) {
+            showSaleNotification(saleNotification);
+        }
+        
+        function showSaleNotification(data) {
+            const isSold = data.is_sold;
+            const status = isSold ? 'SOLD' : 'UNSOLD';
+            const statusClass = isSold ? 'sold' : 'unsold';
+            
+            let detailsHTML = '';
+            if (isSold) {
+                detailsHTML = `
+                    <div class="sale-team">🎯 ${data.team_name}</div>
+                    <div class="sale-price">₹${(data.sold_price / 10000000).toFixed(2)} Cr</div>
+                    <div class="sale-details">Base Price: ₹${(data.base_price / 10000000).toFixed(2)} Cr</div>
+                `;
+            } else {
+                detailsHTML = `
+                    <div class="sale-details">Base Price: ₹${(data.base_price / 10000000).toFixed(2)} Cr</div>
+                    <div class="sale-details" style="margin-top: 1rem; color: #64748b;">No bids received</div>
+                `;
+            }
+            
+            const notificationHTML = `
+                <div class="sale-notification" id="saleNotification">
+                    <div class="sale-notification-content ${statusClass}">
+                        <div class="sale-status ${statusClass}">${status}!</div>
+                        <div class="sale-player-name">🏏 ${data.player_name}</div>
+                        <div class="sale-details">${data.player_type}</div>
+                        ${detailsHTML}
+                    </div>
+                </div>
+            `;
+            
+            document.body.insertAdjacentHTML('beforeend', notificationHTML);
+            
+            // Play sound using multiple methods for better compatibility
+            playSaleSound(status, isSold);
+            
+            // Auto-dismiss after 5 seconds
+            setTimeout(() => {
+                const notification = document.getElementById('saleNotification');
+                if (notification) {
+                    notification.style.animation = 'fadeOut 0.3s';
+                    setTimeout(() => notification.remove(), 300);
+                }
+            }, 4000);
+            
+            // Click to dismiss
+            document.getElementById('saleNotification').onclick = function() {
+                this.style.animation = 'fadeOut 0.3s';
+                setTimeout(() => this.remove(), 300);
+            };
+        }
+        
+        // Play sale sound with multiple methods
+        function playSaleSound(text, isSold) {
+            console.log('Playing sound:', text);
+            
+            // Method 1: Web Speech API (text-to-speech)
+            if ('speechSynthesis' in window) {
+                // Cancel any ongoing speech
+                window.speechSynthesis.cancel();
+                
+                // Wait a bit for cancellation
+                setTimeout(() => {
+                    const utterance = new SpeechSynthesisUtterance(text);
+                    utterance.rate = 0.8;
+                    utterance.pitch = 1.3;
+                    utterance.volume = 1.0;
+                    utterance.lang = 'en-US';
+                    
+                    utterance.onerror = function(event) {
+                        console.error('Speech synthesis error:', event);
+                        playBeepSound(isSold);
+                    };
+                    
+                    utterance.onstart = function() {
+                        console.log('Speech started');
+                    };
+                    
+                    window.speechSynthesis.speak(utterance);
+                }, 100);
+            } else {
+                console.log('Speech synthesis not supported, playing beep');
+                playBeepSound(isSold);
+            }
+            
+            // Also play beep as backup
+            setTimeout(() => playBeepSound(isSold), 200);
+        }
+        
+        // Fallback beep sound using Web Audio API
+        function playBeepSound(isSold) {
+            try {
+                const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                const oscillator = audioContext.createOscillator();
+                const gainNode = audioContext.createGain();
+                
+                oscillator.connect(gainNode);
+                gainNode.connect(audioContext.destination);
+                
+                // Different frequency for sold vs unsold
+                oscillator.frequency.value = isSold ? 800 : 400;
+                oscillator.type = 'sine';
+                
+                gainNode.gain.setValueAtTime(0.3, audioContext.currentTime);
+                gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.5);
+                
+                oscillator.start(audioContext.currentTime);
+                oscillator.stop(audioContext.currentTime + 0.5);
+                
+                console.log('Beep sound played');
+            } catch (e) {
+                console.error('Error playing beep:', e);
+            }
+        }
+        
         // Participant details modal - MUST BE IN GLOBAL SCOPE
         const participantsData = <?php echo json_encode($participants); ?>;
         const totalBudget = <?php echo $room['total_budget_per_team']; ?>;
