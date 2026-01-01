@@ -788,10 +788,6 @@ if ($current_player && ($room['status'] == 'active' || $room['status'] == 'in_pr
                             <div style="text-align: center; margin-top: 1rem; padding: 1rem; background: rgba(239, 68, 68, 0.1); border-radius: 10px; color: #fca5a5;">
                                 <small>🔒 Bidding is locked between two teams. Wait for one to quit.</small>
                             </div>
-                        <?php else: ?>
-                            <div style="text-align: center; margin-top: 1rem; padding: 1rem; background: rgba(251, 191, 36, 0.1); border-radius: 10px; color: #fbbf24;">
-                                <small>⏱️ Player will be automatically sold/unsold when timer reaches 0</small>
-                            </div>
                         <?php endif; ?>
                     </div>
                 <?php endif; ?>
