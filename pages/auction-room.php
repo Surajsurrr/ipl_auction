@@ -393,7 +393,7 @@ if ($current_player) {
         /* Group Selection */
         .group-selection {
             display: grid;
-            grid-template-columns: repeat(4, 1fr);
+            grid-template-columns: repeat(5, 1fr);
             gap: 1rem;
             margin-bottom: 2rem;
         }
@@ -780,11 +780,25 @@ if ($current_player) {
                             <input type="hidden" name="action" value="next_player">
                         </form>
                         <script>
+                            try { window.suppressAutoPause = true; } catch (err) { }
                             document.getElementById('autoNextForm').submit();
                         </script>
                     </div>
                     
                 <?php else: ?>
+                    <!-- Group Selection (host only) -->
+                    <?php if ($is_host): ?>
+                        <div style="margin-bottom: 1rem;">
+                            <form method="POST" style="display: grid; grid-template-columns: repeat(5, 1fr); gap: 0.5rem;">
+                                <input type="hidden" name="action" value="next_player">
+                                <button type="submit" name="group" value="Marquee" class="btn-group">Marquee</button>
+                                <button type="submit" name="group" value="A" class="btn-group">Group A</button>
+                                <button type="submit" name="group" value="B" class="btn-group">Group B</button>
+                                <button type="submit" name="group" value="C" class="btn-group">Group C</button>
+                                <button type="submit" name="group" value="Accelerated" class="btn-group" style="background: rgba(249, 115, 22, 0.12); border-color: rgba(249, 115, 22, 0.3);">Accelerated Round</button>
+                            </form>
+                        </div>
+                    <?php endif; ?>
                     <!-- Current Player Display -->
                     <div class="current-player">
                         <div class="player-header">
@@ -1335,6 +1349,7 @@ if ($current_player) {
             
             form.appendChild(actionInput);
             document.body.appendChild(form);
+            try { window.suppressAutoPause = true; } catch (err) { }
             form.submit();
         }
         
@@ -1362,12 +1377,35 @@ if ($current_player) {
         <?php if ($is_host && (!empty($room['status']) && $room['status'] != 'waiting' && $room['status'] != 'completed' && $room['status'] != 'paused')): ?>
         
         // Use Beacon API for reliable background request
+        // Suppress auto-pause when the user intentionally submits a form
+        window.suppressAutoPause = false;
+
+        // When any form on the page is submitted (e.g. bidding, next player), mark suppression
+        document.addEventListener('submit', function(e) {
+            try { window.suppressAutoPause = true; } catch (err) { /* ignore */ }
+        }, true);
+
+        // Clicking a submit button may trigger navigation without a submit event (browsers vary),
+        // so also mark suppression on clicks inside forms (captures before submit).
+        document.addEventListener('click', function(e) {
+            const btn = e.target.closest('button, input[type="submit"]');
+            if (btn && btn.form) {
+                try { window.suppressAutoPause = true; } catch (err) { /* ignore */ }
+            }
+        }, true);
+
         function pauseAuction() {
+            // If a form submission/navigation was just initiated intentionally, do not auto-pause
+            if (window.suppressAutoPause) {
+                console.log('Auto-pause suppressed due to intentional form submit/navigation');
+                return;
+            }
+
             const formData = new FormData();
             formData.append('room_id', '<?php echo $room_id; ?>');
-            
+
             console.log('Pausing auction room <?php echo $room_id; ?>');
-            
+
             // Try Beacon API first (most reliable)
             if (navigator.sendBeacon) {
                 const sent = navigator.sendBeacon('pause-beacon.php', formData);
@@ -1393,6 +1431,30 @@ if ($current_player) {
                 });
             }
         });
+
+        // Host heartbeat: inform server we are still connected. Runs only for host.
+        try {
+            if (window.isHost === undefined) window.isHost = <?php echo $is_host ? 'true' : 'false'; ?>;
+            if (window.isHost) {
+                function sendHostPing() {
+                    try {
+                        var fd = new FormData();
+                        fd.append('room_id', '<?php echo $room_id; ?>');
+                        if (navigator.sendBeacon) {
+                            navigator.sendBeacon('host_ping.php', fd);
+                        } else {
+                            fetch('host_ping.php', { method: 'POST', body: fd }).catch(()=>{});
+                        }
+                    } catch (e) { console.error(e); }
+                }
+
+                // immediate ping and periodic pings
+                sendHostPing();
+                setInterval(sendHostPing, 2000);
+            }
+        } catch (err) {
+            console.error('Heartbeat init error', err);
+        }
         
         <?php endif; ?>
     </script>

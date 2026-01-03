@@ -226,8 +226,8 @@ function startAuctionRoom($room_id, $user_id) {
         return ['success' => false, 'message' => 'Only host can start auction'];
     }
     
-    // Update room status
-    $update_sql = "UPDATE auction_rooms SET status = 'in_progress', started_at = NOW() WHERE room_id = $room_id";
+    // Update room status and ensure we start from Marquee group
+    $update_sql = "UPDATE auction_rooms SET status = 'in_progress', started_at = NOW(), current_auction_group = 'Marquee' WHERE room_id = $room_id";
     
     if ($conn->query($update_sql)) {
         closeDBConnection($conn);
@@ -238,7 +238,7 @@ function startAuctionRoom($room_id, $user_id) {
     }
 }
 
-// Get next player for room (follows group order: Marquee -> A -> B -> C)
+// Get next player for room (follows group order: Marquee -> A -> B -> C, then Accelerated unsold players)
 function getNextPlayerForRoom($room_id, $group = null) {
     $conn = getDBConnection();
     $room_id = $conn->real_escape_string($room_id);
@@ -251,59 +251,120 @@ function getNextPlayerForRoom($room_id, $group = null) {
     
     // Define group order
     $group_order = ['Marquee', 'A', 'B', 'C'];
-    
-    // Try to get a player from current group
-    $sql = "SELECT p.* FROM players p
-            WHERE p.player_id NOT IN (
-                SELECT player_id FROM room_used_players WHERE room_id = $room_id
-            )
-            AND p.auction_group = '$current_group'
-            ORDER BY RAND() LIMIT 1";
-    
-    $result = $conn->query($sql);
-    $player = $result ? $result->fetch_assoc() : null;
-    
-    // If no player found in current group, move to next group
-    if (!$player) {
-        $current_index = array_search($current_group, $group_order);
-        $next_index = $current_index + 1;
-        
-        // Try next groups in order
-        while ($next_index < count($group_order) && !$player) {
-            $next_group = $group_order[$next_index];
-            
+
+    // If a specific group was requested by the host, honor it (including Accelerated)
+    $player = null;
+        if ($group) {
+        $group = $conn->real_escape_string($group);
+        if (strtolower($group) === 'accelerated') {
+                        // Select UNSOLD players from any previously used group (include Marquee)
+                        $sql = "SELECT p.* FROM players p
+                                        JOIN room_used_players rup ON p.player_id = rup.player_id
+                                        WHERE rup.room_id = $room_id
+                                            AND rup.is_sold = 0
+                                            AND p.player_id NOT IN (
+                                                    SELECT player_id FROM room_player_assignments WHERE room_id = $room_id
+                                            )
+                                        ORDER BY RAND() LIMIT 1";
+            $result = $conn->query($sql);
+            $player = $result ? $result->fetch_assoc() : null;
+
+            if ($player) {
+                $update_sql = "UPDATE auction_rooms 
+                               SET current_player_id = {$player['player_id']}, 
+                                   current_bid = {$player['base_price']}, 
+                                   current_bidder_id = NULL,
+                                   bid_timer_expires_at = DATE_ADD(NOW(), INTERVAL 45 SECOND),
+                                   current_auction_group = 'Accelerated'
+                               WHERE room_id = $room_id";
+                $conn->query($update_sql);
+            }
+        } else {
+            // Normal explicit group requested (Marquee/A/B/C)
             $sql = "SELECT p.* FROM players p
                     WHERE p.player_id NOT IN (
                         SELECT player_id FROM room_used_players WHERE room_id = $room_id
                     )
-                    AND p.auction_group = '$next_group'
+                    AND p.auction_group = '$group'
                     ORDER BY RAND() LIMIT 1";
-            
             $result = $conn->query($sql);
             $player = $result ? $result->fetch_assoc() : null;
-            
+
             if ($player) {
-                $current_group = $next_group;
-                break;
+                $insert_sql = "INSERT INTO room_used_players (room_id, player_id) VALUES ($room_id, {$player['player_id']})";
+                $conn->query($insert_sql);
+
+                $update_sql = "UPDATE auction_rooms 
+                               SET current_player_id = {$player['player_id']}, 
+                                   current_bid = {$player['base_price']}, 
+                                   current_bidder_id = NULL,
+                                   bid_timer_expires_at = DATE_ADD(NOW(), INTERVAL 45 SECOND),
+                                   current_auction_group = '$group'
+                               WHERE room_id = $room_id";
+                $conn->query($update_sql);
             }
-            $next_index++;
         }
     }
-    
-    if ($player) {
-        // Mark as used
-        $insert_sql = "INSERT INTO room_used_players (room_id, player_id) VALUES ($room_id, {$player['player_id']})";
-        $conn->query($insert_sql);
-        
-        // Set as current player and initialize timer, update current group
-        $update_sql = "UPDATE auction_rooms 
-                       SET current_player_id = {$player['player_id']}, 
-                           current_bid = {$player['base_price']}, 
-                           current_bidder_id = NULL,
-                           bid_timer_expires_at = DATE_ADD(NOW(), INTERVAL 45 SECOND),
-                           current_auction_group = '$current_group'
-                       WHERE room_id = $room_id";
-        $conn->query($update_sql);
+
+    // If no explicit group request or no player found yet, fall back to automatic flow
+    if (!$player) {
+        // Try groups in fixed order: Marquee -> A -> B -> C
+        foreach ($group_order as $grp) {
+            $sql = "SELECT p.* FROM players p
+                    WHERE p.player_id NOT IN (
+                        SELECT player_id FROM room_used_players WHERE room_id = $room_id
+                    )
+                    AND p.auction_group = '$grp'
+                    ORDER BY RAND() LIMIT 1";
+
+            $result = $conn->query($sql);
+            $player = $result ? $result->fetch_assoc() : null;
+
+            if ($player) {
+                // Mark as used
+                $insert_sql = "INSERT INTO room_used_players (room_id, player_id) VALUES ($room_id, {$player['player_id']})";
+                $conn->query($insert_sql);
+
+                // Set as current player and initialize timer, update current group
+                $update_sql = "UPDATE auction_rooms 
+                               SET current_player_id = {$player['player_id']}, 
+                                   current_bid = {$player['base_price']}, 
+                                   current_bidder_id = NULL,
+                                   bid_timer_expires_at = DATE_ADD(NOW(), INTERVAL 45 SECOND),
+                                   current_auction_group = '$grp'
+                               WHERE room_id = $room_id";
+                $conn->query($update_sql);
+                break;
+            }
+        }
+
+        // If no player found in the normal groups, start Accelerated round
+        if (!$player) {
+            // Select previously used but UNSOLD players for accelerated round (include Marquee)
+            $sql = "SELECT p.* FROM players p
+                    JOIN room_used_players rup ON p.player_id = rup.player_id
+                    WHERE rup.room_id = $room_id
+                      AND rup.is_sold = 0
+                      AND p.player_id NOT IN (
+                          SELECT player_id FROM room_player_assignments WHERE room_id = $room_id
+                      )
+                    ORDER BY RAND() LIMIT 1";
+
+            $result = $conn->query($sql);
+            $player = $result ? $result->fetch_assoc() : null;
+
+            if ($player) {
+                // Accelerated round - mark current auction group accordingly
+                $update_sql = "UPDATE auction_rooms 
+                               SET current_player_id = {$player['player_id']}, 
+                                   current_bid = {$player['base_price']}, 
+                                   current_bidder_id = NULL,
+                                   bid_timer_expires_at = DATE_ADD(NOW(), INTERVAL 45 SECOND),
+                                   current_auction_group = 'Accelerated'
+                               WHERE room_id = $room_id";
+                $conn->query($update_sql);
+            }
+        }
     }
     
     closeDBConnection($conn);

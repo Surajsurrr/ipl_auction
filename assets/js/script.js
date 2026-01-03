@@ -108,6 +108,7 @@ function finalizeSale() {
         if (data.success) {
             showAlert(data.message, 'success');
             setTimeout(() => {
+                try { window.suppressAutoPause = true; } catch (err) { }
                 location.reload();
             }, 1500);
         } else {
@@ -134,6 +135,7 @@ function passPlayer() {
         if (data.success) {
             showAlert('Player passed', 'info');
             setTimeout(() => {
+                try { window.suppressAutoPause = true; } catch (err) { }
                 location.reload();
             }, 1500);
         } else {
