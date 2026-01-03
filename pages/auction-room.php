@@ -787,18 +787,22 @@ if ($current_player) {
                     
                 <?php else: ?>
                     <!-- Group Selection (host only) -->
-                    <?php if ($is_host): ?>
-                        <div style="margin-bottom: 1rem;">
-                            <form method="POST" style="display: grid; grid-template-columns: repeat(5, 1fr); gap: 0.5rem;">
-                                <input type="hidden" name="action" value="next_player">
-                                <button type="submit" name="group" value="Marquee" class="btn-group">Marquee</button>
-                                <button type="submit" name="group" value="A" class="btn-group">Group A</button>
-                                <button type="submit" name="group" value="B" class="btn-group">Group B</button>
-                                <button type="submit" name="group" value="C" class="btn-group">Group C</button>
-                                <button type="submit" name="group" value="Accelerated" class="btn-group" style="background: rgba(249, 115, 22, 0.12); border-color: rgba(249, 115, 22, 0.3);">Accelerated Round</button>
-                            </form>
+                    <!-- single set of group buttons (visible to all). Host can request next player from the modal -->
+
+                    <!-- Group View Buttons (visible to all participants) -->
+                    <div style="margin-bottom: 1rem;">
+                        <div style="display: grid; grid-template-columns: repeat(5, 1fr); gap: 0.5rem;">
+                            <button type="button" class="btn-group" data-group="Marquee" onclick="showGroupPlayers('Marquee')">Marquee</button>
+                            <button type="button" class="btn-group" data-group="A" onclick="showGroupPlayers('A')">Group A</button>
+                            <button type="button" class="btn-group" data-group="B" onclick="showGroupPlayers('B')">Group B</button>
+                            <button type="button" class="btn-group" data-group="C" onclick="showGroupPlayers('C')">Group C</button>
+                            <button type="button" class="btn-group" data-group="Accelerated" onclick="showGroupPlayers('Accelerated')">Accelerated Round</button>
                         </div>
-                    <?php endif; ?>
+                    </div>
+                    <form id="hostRequestForm" method="POST" style="display:none;">
+                        <input type="hidden" name="action" value="next_player">
+                        <input type="hidden" name="group" id="hostRequestGroup">
+                    </form>
                     <!-- Current Player Display -->
                     <div class="current-player">
                         <div class="player-header">
@@ -982,6 +986,7 @@ if ($current_player) {
         // ============================================================================
         const participantsData = <?php echo json_encode($participants); ?>;
         const totalBudget = <?php echo $room['total_budget_per_team']; ?>;
+        const isHost = <?php echo $is_host ? 'true' : 'false'; ?>;
         
         console.log('Participants data loaded:', participantsData);
         console.log('Total budget:', totalBudget);
@@ -1013,6 +1018,78 @@ if ($current_player) {
                     console.error('Error fetching data:', error);
                     alert('Error loading player data: ' + error.message);
                 });
+        }
+
+        // ============================================================================
+        // GROUP PLAYERS MODAL (visible to all participants)
+        // ============================================================================
+        function showGroupPlayers(group) {
+            console.log('Fetching players for group:', group);
+            const url = 'get_group_players.php?group=' + encodeURIComponent(group) + '&room_id=<?php echo $room_id; ?>';
+
+            fetch(url)
+                .then(r => r.json())
+                .then(data => {
+                    if (!data.success) {
+                        alert('Error fetching players: ' + (data.error || 'unknown'));
+                        return;
+                    }
+
+                    const players = data.players || [];
+                    let html = '';
+
+                    if (players.length === 0) {
+                        html = '<div style="text-align:center; padding:2rem; color:#94a3b8;">No remaining players in this group</div>';
+                    } else {
+                        html = '<div class="players-list">';
+                        players.forEach(p => {
+                            html += `
+                                <div class="player-card-modal">
+                                    <h4>🏏 ${p.player_name}</h4>
+                                    <div class="player-detail"><span class="player-detail-label">Group:</span><span class="player-detail-value">${p.auction_group}</span></div>
+                                    <div class="player-detail"><span class="player-detail-label">Base Price:</span><span class="player-detail-value">₹${(p.base_price/10000000).toFixed(2)} Cr</span></div>
+                                    <div class="player-detail"><span class="player-detail-label">Status:</span><span class="player-detail-value">${p.is_sold ? 'Unsold (in accelerated)' : 'Not yet on block'}</span></div>
+                                </div>
+                            `;
+                        });
+                        html += '</div>';
+                    }
+
+                    const modal = document.getElementById('groupPlayersModal');
+                    if (modal) modal.remove();
+
+                    const modalHTML = `
+                        <div id="groupPlayersModal" class="modal" style="display:block;">
+                            <div class="modal-content">
+                                <div class="modal-header">
+                                    <h2>Players in ${group} (${players.length})</h2>
+                                    ${isHost ? `<button type="button" style="margin-right:1rem; background:#10b981; color:white; border:none; padding:0.5rem 0.75rem; border-radius:6px; cursor:pointer;" onclick="requestNextPlayer('${group.replace("'","\\'")}')">Request Next Player</button>` : ''}
+                                    <span class="close" onclick="closeGroupModal()">&times;</span>
+                                </div>
+                                <div class="modal-body">
+                                    ${html}
+                                </div>
+                            </div>
+                        </div>
+                    `;
+
+                    document.body.insertAdjacentHTML('beforeend', modalHTML);
+                    document.getElementById('groupPlayersModal').onclick = function(e) { if (e.target.id === 'groupPlayersModal') closeGroupModal(); };
+                })
+                .catch(err => { console.error(err); alert('Error fetching players'); });
+        }
+
+        function closeGroupModal() { const m = document.getElementById('groupPlayersModal'); if (m) m.remove(); }
+
+        // Host-side request: submit hidden form to request next player from a group
+        function requestNextPlayer(group) {
+            if (!isHost) return alert('Only host can request next player');
+            const form = document.getElementById('hostRequestForm');
+            if (!form) return alert('Host request form not found');
+            const input = document.getElementById('hostRequestGroup');
+            input.value = group;
+            try { window.suppressAutoPause = true; } catch (e) {}
+            form.submit();
         }
         
         function displayParticipantModal(participant, players) {
