@@ -393,11 +393,17 @@ function placeBidInRoom($room_id, $participant_id, $bid_amount) {
         return ['success' => false, 'message' => 'Insufficient budget'];
     }
     
-    // Get current room info
-    $room_sql = "SELECT current_player_id, current_bid, bidding_war_player1_id, bidding_war_player2_id FROM auction_rooms WHERE room_id = $room_id";
+    // Get current room info (include current_bidder_id for alternation check)
+    $room_sql = "SELECT current_player_id, current_bid, current_bidder_id, bidding_war_player1_id, bidding_war_player2_id FROM auction_rooms WHERE room_id = $room_id";
     $room_result = $conn->query($room_sql);
     $room = $room_result->fetch_assoc();
     
+    // Prevent same participant from bidding twice in a row - ensure alternate turns
+    if ($room['current_bidder_id'] && $room['current_bidder_id'] == $participant_id) {
+        closeDBConnection($conn);
+        return ['success' => false, 'message' => 'Please wait for other teams to bid before bidding again'];
+    }
+
     if ($bid_amount <= $room['current_bid']) {
         closeDBConnection($conn);
         return ['success' => false, 'message' => 'Bid must be higher than current bid'];
