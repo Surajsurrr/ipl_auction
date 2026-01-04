@@ -123,6 +123,20 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['action'])) {
         resumeAuctionRoom($room_id);
         header('Location: auction-room.php?room_id=' . $room_id);
         exit();
+    } elseif ($_POST['action'] == 'end_auction' && $is_host) {
+        // Mark auction as completed and redirect to summary dashboard
+        try {
+            $conn = getDBConnection();
+            $room_id_safe = $conn->real_escape_string($room_id);
+            $conn->query("UPDATE auction_rooms SET status = 'completed' WHERE room_id = $room_id_safe");
+            closeDBConnection($conn);
+        } catch (Exception $e) {
+            error_log('Error ending auction: ' . $e->getMessage());
+        }
+
+        // Redirect to auction summary dashboard
+        header('Location: auction-summary.php?room_id=' . $room_id);
+        exit();
     }
 }
 
@@ -692,6 +706,13 @@ if ($current_player) {
                     <input type="hidden" name="action" value="<?php echo $room['status'] == 'paused' ? 'resume' : 'pause'; ?>">
                     <button type="submit" style="padding: 0.75rem 1.5rem; background: <?php echo $room['status'] == 'paused' ? 'linear-gradient(135deg, #34d399, #10b981)' : 'linear-gradient(135deg, #ef4444, #dc2626)'; ?>; color: white; border: none; border-radius: 8px; font-weight: 600; cursor: pointer; transition: all 0.3s; font-size: 1rem; box-shadow: 0 4px 6px rgba(0,0,0,0.3);">
                         <?php echo $room['status'] == 'paused' ? '▶️ Resume Auction' : '⏸️ Pause Auction'; ?>
+                    </button>
+                </form>
+                <!-- End Auction button (host only) -->
+                <form method="POST" style="margin: 0 0 0 0.5rem; display: inline-block;">
+                    <input type="hidden" name="action" value="end_auction">
+                    <button type="submit" onclick="return confirm('Are you sure you want to end the auction? This will finalize the auction and show the summary to all participants.');" style="padding: 0.75rem 1rem; background: linear-gradient(135deg,#0ea5a4,#0891b2); color: white; border: none; border-radius: 8px; font-weight: 600; cursor: pointer; transition: all 0.2s; font-size: 0.95rem; box-shadow: 0 4px 6px rgba(0,0,0,0.2); margin-left:8px;">
+                        🏁 End Auction
                     </button>
                 </form>
             <?php endif; ?>
