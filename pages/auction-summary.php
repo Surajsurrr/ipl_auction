@@ -3,6 +3,28 @@ require_once __DIR__ . '/../config/session.php';
 require_once __DIR__ . '/../config/database.php';
 require_once __DIR__ . '/../includes/auction_room_functions.php';
 
+// Helper: resolve a team logo path by matching known name fragments (falls back to null)
+function getTeamLogoPath($team_name) {
+    $team_logos = [
+        'Chennai' => '../assets/images/teams/csk.png',
+        'Delhi' => '../assets/images/teams/dc.png',
+        'Mumbai' => '../assets/images/teams/mi.png',
+        'Kolkata' => '../assets/images/teams/kkr.png',
+        'Gujarat' => '../assets/images/teams/gt.png',
+        'Royal' => '../assets/images/teams/rcb.png',
+        'Rajasthan' => '../assets/images/teams/rr.png',
+        'Sunrisers' => '../assets/images/teams/srh.png',
+        'Lucknow' => '../assets/images/teams/lsg.png',
+        'Punjab' => '../assets/images/teams/pbks.png'
+    ];
+
+    foreach ($team_logos as $key => $path) {
+        if (stripos($team_name, $key) !== false) return $path;
+    }
+
+    return null;
+}
+
 // Get room id
 $room_id = isset($_GET['room_id']) ? intval($_GET['room_id']) : 0;
 if (!$room_id) {
@@ -25,6 +47,11 @@ if ($room['status'] !== 'completed' && $room['status'] !== 'finished') {
 
 // Fetch participants (teams) using helper
 $participants = getRoomParticipants($room_id);
+
+// Attach logo path to participants for template rendering
+foreach ($participants as $i => $part) {
+    $participants[$i]['logo'] = getTeamLogoPath($part['team_name'] ?? '');
+}
 
 // Fetch assignments grouped by participant using mysqli
 $conn = getDBConnection();
@@ -129,6 +156,25 @@ $teamClassMap = [
             border-radius: 50%;
             filter: blur(60px);
         }
+
+        /* Winner banner */
+        .winner-banner {
+            display: none;
+            position: relative;
+            margin-top: 1rem;
+            padding: 1rem 1.25rem;
+            border-radius: 14px;
+            background: linear-gradient(135deg, rgba(6,182,212,0.12), rgba(59,130,246,0.06));
+            border: 1px solid rgba(16,185,129,0.06);
+            box-shadow: 0 8px 30px rgba(2,6,23,0.04);
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .winner-banner img { width:48px;height:48px;border-radius:8px; }
+        .winner-banner .winner-text { font-size:1.25rem; font-weight:800; color:#0f172a; }
+        .winner-banner .winner-sub { color:#475569; font-weight:600; }
 
         .summary-header { 
             display: flex; 
@@ -289,6 +335,19 @@ $teamClassMap = [
             padding-bottom: 1.5rem;
             border-bottom: 2px solid rgba(255, 70, 85, 0.1);
         }
+
+        .vote-btn {
+            background: linear-gradient(135deg,#06b6d4,#3b82f6);
+            color: white;
+            border: none;
+            padding: 0.5rem 0.9rem;
+            border-radius: 10px;
+            font-weight: 700;
+            cursor: pointer;
+            margin-left: 8px;
+        }
+        .vote-btn.voted { background: linear-gradient(135deg,#f59e0b,#f97316); }
+        .vote-count { font-weight:700; color:#0f172a; margin-left:8px; }
         
         .team-info h3 { 
             font-size: 1.6rem; 
@@ -441,6 +500,61 @@ $teamClassMap = [
             }
         }
     </style>
+    <style>
+        /* Chat sidebar styles */
+        .chat-toggle {
+            position: fixed;
+            left: 16px;
+            top: 220px;
+            z-index: 1200;
+            background: linear-gradient(135deg,#06b6d4,#3b82f6);
+            color: white;
+            border: none;
+            width: 48px;
+            height: 48px;
+            border-radius: 12px;
+            box-shadow: 0 8px 30px rgba(2,6,23,0.5);
+            cursor: pointer;
+            font-size: 18px;
+        }
+
+        .chat-sidebar {
+            position: fixed;
+            left: 16px;
+            top: 60px;
+            bottom: 20px;
+            width: 340px;
+            /* keep a fixed width so it never expands to full width */
+            max-width: 340px;
+            /* slightly transparent so page to the right remains visible */
+            background: rgba(11,18,32,0.88);
+            backdrop-filter: blur(6px);
+            color: white;
+            border-radius: 12px;
+            /* smaller shadow so it doesn't visually dominate */
+            box-shadow: 0 8px 30px rgba(2,6,23,0.45);
+            display: none;
+            z-index: 1200;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .chat-header { padding: 12px 14px; display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid rgba(255,255,255,0.04); }
+        .chat-title { font-weight:700; }
+        .chat-close { background:transparent; color: #cbd5e1; border:none; cursor:pointer; font-size:16px; }
+
+        .chat-messages { padding: 12px; overflow-y: auto; flex:1; }
+        .chat-message { margin-bottom: 10px; display:flex; gap:8px; align-items:flex-start; }
+        .chat-avatar { width:36px; height:36px; border-radius:8px; background:#111827; flex:0 0 36px; display:inline-block; overflow:hidden; }
+        .chat-avatar img { width:100%; height:100%; object-fit:cover; }
+        .chat-bubble { background: rgba(255,255,255,0.04); padding:8px 10px; border-radius:8px; max-width:78%; }
+        .chat-meta { font-size:12px; color:#9ca3af; margin-bottom:4px; }
+
+        .chat-form { display:flex; gap:8px; padding:10px; border-top:1px solid rgba(255,255,255,0.03); }
+        .chat-form input { flex:1; padding:10px 12px; border-radius:8px; border:1px solid rgba(255,255,255,0.04); background: rgba(255,255,255,0.02); color:white; }
+        .chat-form button { padding:10px 12px; border-radius:8px; border:none; background:linear-gradient(135deg,#06b6d4,#3b82f6); color:white; cursor:pointer; }
+    </style>
 </head>
 <body>
 <?php if (file_exists(__DIR__ . '/../includes/header.php')) include __DIR__ . '/../includes/header.php'; ?>
@@ -456,18 +570,48 @@ $teamClassMap = [
                         <strong><?php echo htmlspecialchars($room['room_name'] ?? 'IPL Auction'); ?></strong> - Final squads and remaining purses
                     </div>
                 </div>
+                <div id="winnerBanner" class="winner-banner" role="status" aria-live="polite" style="display:none;">
+                    <img id="winnerLogo" src="" alt="winner logo" />
+                    <div>
+                        <div class="winner-text" id="winnerText">The winner is <span id="winnerTeamName"></span></div>
+                        <div class="winner-sub">Congratulations to the winning team!</div>
+                    </div>
+                </div>
                 <div class="summary-controls">
                     <a class="back-link" href="my-auctions.php">
                         <i class="fas fa-arrow-left"></i> Back to My Auctions
                     </a>
-                    <a class="csv-btn" href="auction-summary.php?room_id=<?php echo $room_id; ?>&export=csv">
-                        <i class="fas fa-download"></i> Export CSV
-                    </a>
+                    <button id="startVoting" class="csv-btn" style="display:inline-flex;align-items:center;gap:0.5rem;">
+                        <i class="fas fa-vote-yea"></i> Vote for the Best
+                    </button>
+                    <div id="votingStatus" style="margin-left:8px; font-weight:700; color:#0f172a; display:flex; align-items:center; gap:8px;"></div>
+                    <?php $currentUser = getCurrentUser(); $isHost = $currentUser && ((int)$currentUser['user_id'] === (int)$room['created_by']); ?>
+                    <?php if ($isHost): ?>
+                        <button id="announceWinner" class="csv-btn" style="background:linear-gradient(135deg,#f59e0b,#f97316); display:inline-flex;align-items:center;gap:0.5rem; margin-left:8px;" disabled>
+                            <i class="fas fa-bullhorn"></i> Announce Winner
+                        </button>
+                        <div id="announceError" style="color:#ff6b6b;font-weight:700;margin-left:8px;display:inline-block;"></div>
+                    <?php endif; ?>
                 </div>
             </div>
         </div>
 
         <!-- Teams Grid -->
+        <!-- Chat sidebar toggle + container -->
+        <div id="chatSidebar" class="chat-sidebar">
+            <div class="chat-header">
+                <div class="chat-title">Live Chat</div>
+                <button id="chatClose" class="chat-close" title="Close chat">✕</button>
+            </div>
+            <div id="chatMessages" class="chat-messages" aria-live="polite"></div>
+            <form id="chatForm" class="chat-form">
+                <input type="text" id="chatInput" placeholder="Write a message..." autocomplete="off" />
+                <button type="submit">Send</button>
+            </form>
+        </div>
+
+        <button id="chatToggle" class="chat-toggle" title="Open chat">💬</button>
+
         <?php if (count($participants) === 0): ?>
             <div class="empty-state">
                 <i class="fas fa-users-slash"></i>
@@ -480,8 +624,21 @@ $teamClassMap = [
                     <div class="team-card <?php echo $teamClass; ?>">
                         <div class="team-header">
                             <div class="team-info">
-                                <h3><i class="fas fa-shield-alt"></i> <?php echo htmlspecialchars($p['team_name'] ?: 'Team'); ?></h3>
-                                <div class="team-id">Participant #<?php echo (int)$p['participant_id']; ?></div>
+                                <h3>
+                                    <?php if (!empty($p['logo'])): ?>
+                                        <img src="<?php echo htmlspecialchars($p['logo']); ?>" alt="<?php echo htmlspecialchars($p['team_name']); ?> logo" style="width:36px;height:36px;vertical-align:middle;margin-right:8px;border-radius:6px;">
+                                    <?php else: ?>
+                                        <i class="fas fa-shield-alt"></i>
+                                    <?php endif; ?>
+                                    <?php echo htmlspecialchars($p['team_name'] ?: 'Team'); ?>
+                                </h3>
+                                <div style="display:flex; align-items:center; gap:12px; margin-top:6px;">
+                                    <div class="team-id">Participant #<?php echo (int)$p['participant_id']; ?></div>
+                                    <div>
+                                        <button class="vote-btn" data-pid="<?php echo (int)$p['participant_id']; ?>">Vote</button>
+                                        <span class="vote-count" data-pid="<?php echo (int)$p['participant_id']; ?>">0</span>
+                                    </div>
+                                </div>
                             </div>
                             <div class="team-stats">
                                 <div class="purse-badge">
@@ -524,6 +681,300 @@ $teamClassMap = [
 </div>
 
 <?php if (file_exists(__DIR__ . '/../includes/footer.php')) include __DIR__ . '/../includes/footer.php'; ?>
+    <script>
+        // Chat client for summary page
+        const currentUser = <?php echo json_encode(getCurrentUser() ?: null); ?>;
+        const participants = <?php echo json_encode($participants); ?>;
+        const isHost = <?php echo json_encode($isHost ?? false); ?>;
+        const roomStatus = <?php echo json_encode($room['status'] ?? ''); ?>;
+        const roomId = <?php echo json_encode($room_id); ?>;
+
+        // Find participant entry for current user if any
+        let myParticipant = null;
+        if (currentUser) {
+            myParticipant = participants.find(p => p.user_id == currentUser.user_id) || null;
+        }
+
+        const chatToggle = document.getElementById('chatToggle');
+        const chatSidebar = document.getElementById('chatSidebar');
+        const chatClose = document.getElementById('chatClose');
+        const chatForm = document.getElementById('chatForm');
+        const chatInput = document.getElementById('chatInput');
+        const chatMessages = document.getElementById('chatMessages');
+
+        function openChat() { chatSidebar.style.display = 'flex'; chatToggle.style.display = 'none'; loadMessages(true); }
+        function closeChat() { chatSidebar.style.display = 'none'; chatToggle.style.display = 'block'; }
+
+        chatToggle.addEventListener('click', openChat);
+        chatClose.addEventListener('click', closeChat);
+
+        async function loadMessages(scrollToBottom) {
+            try {
+                const res = await fetch('../ajax/chat.php?room_id=' + encodeURIComponent(roomId));
+                const data = await res.json();
+                if (!data.success) return;
+                renderMessages(data.messages || [], scrollToBottom);
+            } catch (e) {
+                console.error('Chat load error', e);
+            }
+        }
+
+        function renderMessages(messages, scrollToBottom) {
+            chatMessages.innerHTML = '';
+            messages.forEach(m => {
+                const row = document.createElement('div');
+                row.className = 'chat-message';
+
+                const avatar = document.createElement('div');
+                avatar.className = 'chat-avatar';
+                // try to find participant logo
+                let logo = null;
+                if (m.participant_id) {
+                    const p = participants.find(pp => pp.participant_id == m.participant_id);
+                    if (p && p.logo) logo = p.logo;
+                }
+                if (logo) {
+                    avatar.innerHTML = `<img src="${logo}" alt="logo">`;
+                } else {
+                    avatar.innerHTML = '<span style="display:block;width:100%;height:100%;background:#111827;border-radius:6px;"></span>';
+                }
+
+                const bubble = document.createElement('div');
+                bubble.className = 'chat-bubble';
+                bubble.innerHTML = `<div class="chat-meta"><strong>${escapeHtml(m.username)}</strong> <span style="margin-left:6px;color:#7c8ea3;font-size:11px;">${new Date(m.timestamp*1000).toLocaleTimeString()}</span></div><div>${escapeHtml(m.text)}</div>`;
+
+                row.appendChild(avatar);
+                row.appendChild(bubble);
+                chatMessages.appendChild(row);
+            });
+            if (scrollToBottom) chatMessages.scrollTop = chatMessages.scrollHeight;
+        }
+
+        // Show inline winner announcement and use speech synthesis
+        function showAnnouncement(teamName, logo) {
+            const banner = document.getElementById('winnerBanner');
+            const tEl = document.getElementById('winnerTeamName');
+            const lEl = document.getElementById('winnerLogo');
+            if (tEl) tEl.textContent = teamName;
+            if (lEl) {
+                if (logo) { lEl.src = logo; lEl.style.display = 'block'; } else { lEl.style.display = 'none'; }
+            }
+            if (banner) banner.style.display = 'flex';
+
+            try {
+                const utter = new SpeechSynthesisUtterance('The winner is ' + teamName);
+                window.speechSynthesis.cancel();
+                window.speechSynthesis.speak(utter);
+            } catch (e) { console.warn('TTS not available', e); }
+        }
+
+        function escapeHtml(s) { if (!s) return ''; return String(s).replace(/[&<>"']/g, function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":"&#39;"}[c]; }); }
+
+        // Polling
+        let pollInterval = null;
+        function startPolling() { if (pollInterval) clearInterval(pollInterval); pollInterval = setInterval(()=>loadMessages(false), 2500); }
+
+        // Poll for announcements every 3 seconds
+        let announcementPoll = null;
+        function startAnnouncementPolling() {
+            if (announcementPoll) clearInterval(announcementPoll);
+            announcementPoll = setInterval(checkAnnouncement, 3000);
+        }
+
+        async function checkAnnouncement() {
+            try {
+                const res = await fetch('../ajax/get_announcement.php?room_id=' + encodeURIComponent(roomId));
+                const data = await res.json();
+                if (!data.success) return;
+                if (data.has && data.announcement) {
+                    const ann = data.announcement;
+                    // avoid re-showing if already visible
+                    const banner = document.getElementById('winnerBanner');
+                    if (banner && banner.style.display === 'flex') return;
+                    const winning = participants.find(p => String(p.participant_id) === String(ann.winner_participant_id));
+                    const teamName = ann.winner_team || (winning ? winning.team_name : 'Winner');
+                    const logo = winning ? (winning.logo || '') : '';
+                    showAnnouncement(teamName, logo);
+                    // disable announce button for host
+                    const announceBtn = document.getElementById('announceWinner'); if (announceBtn) { announceBtn.disabled = true; announceBtn.style.opacity = 0.6; }
+                }
+            } catch (e) { console.error('Announcement poll error', e); }
+        }
+
+        chatForm.addEventListener('submit', async function(e){
+            e.preventDefault();
+            const text = chatInput.value.trim();
+            if (!text) return;
+            const payload = { room_id: roomId, text: text };
+            if (myParticipant) { payload.participant_id = myParticipant.participant_id; payload.team_name = myParticipant.team_name; }
+            try {
+                const res = await fetch('../ajax/chat.php', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+                const data = await res.json();
+                if (data.success) {
+                    chatInput.value = '';
+                    loadMessages(true);
+                } else {
+                    alert('Could not send message: ' + (data.error || 'unknown'));
+                }
+            } catch (err) { console.error(err); alert('Send failed'); }
+        });
+
+        // Start polling when chat is open
+        // Open chat automatically for convenience on desktop
+        window.addEventListener('load', function(){ startPolling(); startAnnouncementPolling(); });
+
+        // ----------------------- Voting functionality -----------------------
+        const startVotingBtn = document.getElementById('startVoting');
+        const votingStatus = document.getElementById('votingStatus');
+
+        startVotingBtn && startVotingBtn.addEventListener('click', function(){
+            // reveal voting controls (they are already visible) and fetch current votes
+            fetchVotes(true);
+            // optionally scroll to teams
+            const el = document.querySelector('.teams-grid'); if (el) el.scrollIntoView({behavior:'smooth'});
+        });
+
+        async function fetchVotes(scrollToWinner) {
+            try {
+                const res = await fetch('../ajax/vote.php?room_id=' + encodeURIComponent(roomId));
+                const data = await res.json();
+                if (!data.success) return;
+                const counts = data.counts || {};
+                const userVote = data.user_vote || null;
+
+                // update counts and button states
+                document.querySelectorAll('.vote-count').forEach(el => {
+                    const pid = el.getAttribute('data-pid');
+                    const c = counts[pid] || 0;
+                    el.textContent = c + ' votes';
+                });
+
+                document.querySelectorAll('.vote-btn').forEach(btn => {
+                    const pid = btn.getAttribute('data-pid');
+                    if (String(pid) === String(userVote)) {
+                        btn.classList.add('voted');
+                        btn.textContent = 'Voted';
+                    } else {
+                        btn.classList.remove('voted');
+                        btn.textContent = 'Vote';
+                    }
+                });
+
+                // compute winner
+                let winnerPid = null; let winnerCount = 0;
+                for (const [k,v] of Object.entries(counts)) {
+                    if (v > winnerCount) { winnerCount = v; winnerPid = k; }
+                }
+
+                // enable announce button for host only when all participants have voted
+                try {
+                    const announceBtn = document.getElementById('announceWinner');
+                    if (announceBtn) {
+                        const totalVotes = Object.values(counts).reduce((s,n) => s + (parseInt(n)||0), 0);
+                        if (isHost && totalVotes >= participants.length) {
+                            announceBtn.disabled = false;
+                        } else {
+                            announceBtn.disabled = true;
+                        }
+                    }
+                } catch (e) { console.error(e); }
+
+                // Render vote summary for all participants next to the main button
+                let summaryHtml = '';
+                participants.forEach(p => {
+                    const pid = String(p.participant_id);
+                    const c = counts[pid] || 0;
+                    const logo = p.logo ? p.logo : '';
+                    summaryHtml += `<span style="display:inline-flex;align-items:center;gap:8px;margin-left:10px;">${logo ? `<img src='${logo}' style='width:22px;height:22px;border-radius:4px;'>` : ''}<strong style='font-weight:700;color:#0f172a;'>${escapeHtml(p.team_name)}</strong> <small style='color:#334155;margin-left:6px;'>• ${c} votes</small></span>`;
+                });
+                votingStatus.innerHTML = summaryHtml || 'No votes yet';
+
+                // highlight current winner if requested
+                    if (winnerPid && scrollToWinner) {
+                    const card = [...document.querySelectorAll('.team-card')].find(c => c.querySelector('.vote-btn') && c.querySelector('.vote-btn').getAttribute('data-pid') === String(winnerPid));
+                    if (card) {
+                        card.style.transition = 'box-shadow 0.3s, transform 0.3s';
+                        card.style.transform = 'translateY(-6px)';
+                        setTimeout(()=>{ card.style.transform = ''; }, 1500);
+                    }
+                }
+
+                // If the room is already finished, reveal the winner banner inline
+                try {
+                    if ((roomStatus === 'finished' || roomStatus === 'completed') && winnerPid) {
+                        const winning = participants.find(p => String(p.participant_id) === String(winnerPid));
+                        if (winning) showAnnouncement(winning.team_name, winning.logo || '');
+                    }
+                } catch (e) { console.error(e); }
+
+            } catch (e) { console.error('Vote fetch error', e); }
+        }
+
+        // Attach click handlers to vote buttons
+        document.querySelectorAll('.vote-btn').forEach(btn => {
+            btn.addEventListener('click', async function(){
+                if (!currentUser) return alert('Please log in to vote');
+                const pid = btn.getAttribute('data-pid');
+                try {
+                    const res = await fetch('../ajax/vote.php', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ room_id: roomId, participant_id: pid }) });
+                    const data = await res.json();
+                    if (data.success) {
+                        fetchVotes(true);
+                    } else {
+                        alert('Vote failed: ' + (data.error || 'unknown'));
+                    }
+                } catch (err) { console.error(err); alert('Vote request failed'); }
+            });
+        });
+
+        // Announce winner (host only)
+        const announceBtnEl = document.getElementById('announceWinner');
+        if (announceBtnEl) {
+            announceBtnEl.addEventListener('click', async function(){
+                // Inline confirmation: require two clicks within 5s to confirm
+                if (!announceBtnEl.dataset.confirm) {
+                    announceBtnEl.dataset.confirm = '1';
+                    const original = announceBtnEl.innerHTML;
+                    announceBtnEl.innerHTML = '<i class="fas fa-exclamation-triangle"></i> Click again to confirm';
+                    announceBtnEl.style.filter = 'brightness(0.95)';
+                    setTimeout(()=>{ delete announceBtnEl.dataset.confirm; announceBtnEl.innerHTML = original; announceBtnEl.style.filter = ''; }, 5000);
+                    return;
+                }
+                // fetch latest counts to determine winner
+                try {
+                    const res = await fetch('../ajax/vote.php?room_id=' + encodeURIComponent(roomId));
+                    const data = await res.json();
+                    if (!data.success) { document.getElementById('announceError').textContent = 'Could not fetch votes'; return; }
+                    const counts = data.counts || {};
+                    // find top
+                    let winnerPid = null; let winnerCount = 0;
+                    for (const [k,v] of Object.entries(counts)) {
+                        if (v > winnerCount) { winnerCount = v; winnerPid = k; }
+                    }
+                    if (!winnerPid) { document.getElementById('announceError').textContent = 'No votes yet'; return; }
+                    // call announce endpoint
+                    const post = await fetch('../ajax/announce_winner.php', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ room_id: roomId, participant_id: winnerPid }) });
+                    const out = await post.json();
+                    if (out.success) {
+                        // find logo for winner
+                        const winning = participants.find(p => String(p.participant_id) === String(out.winner_participant_id));
+                        const logo = winning ? (winning.logo || '') : '';
+                        showAnnouncement(out.winner_team, logo);
+                        // disable announce button after success
+                        announceBtnEl.disabled = true;
+                        announceBtnEl.style.opacity = 0.6;
+                        document.getElementById('announceError').textContent = '';
+                    } else {
+                        document.getElementById('announceError').textContent = 'Announce failed: ' + (out.error || 'unknown');
+                    }
+                } catch (e) { console.error(e); document.getElementById('announceError').textContent = 'Announce failed'; }
+            });
+        }
+
+        // initial votes load
+        fetchVotes(false);
+
+    </script>
 </body>
 </html>
 

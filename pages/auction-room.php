@@ -5,6 +5,30 @@ require_once '../includes/player_functions.php';
 
 requireLogin();
 
+// Helper: return a team logo path (or null) by matching known name fragments
+function getTeamLogoPath($team_name) {
+    $team_logos = [
+        'Chennai' => '../assets/images/teams/csk.png',
+        'Delhi' => '../assets/images/teams/dc.png',
+        'Mumbai' => '../assets/images/teams/mi.png',
+        'Kolkata' => '../assets/images/teams/kkr.png',
+        'Gujarat' => '../assets/images/teams/gt.png',
+        'Royal' => '../assets/images/teams/rcb.png',
+        'Rajasthan' => '../assets/images/teams/rr.png',
+        'Sunrisers' => '../assets/images/teams/srh.png',
+        'Lucknow' => '../assets/images/teams/lsg.png',
+        'Punjab' => '../assets/images/teams/pbks.png'
+    ];
+
+    foreach ($team_logos as $key => $path) {
+        if (stripos($team_name, $key) !== false) {
+            return $path;
+        }
+    }
+
+    return null;
+}
+
 $current_user = getCurrentUser();
 $room_id = $_GET['room_id'] ?? 0;
 
@@ -41,6 +65,10 @@ if (!$userCheck['in_room']) {
 }
 
 $participants = getRoomParticipants($room_id);
+// Attach resolved logo path for each participant (used by JS and templates)
+foreach ($participants as $idx => $pp) {
+    $participants[$idx]['logo'] = getTeamLogoPath($pp['team_name']);
+}
 $is_host = $room['created_by'] == $current_user['user_id'];
 $participant_id = $userCheck['participant_id'];
 
@@ -103,6 +131,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['action'])) {
             'base_price' => $sale_player['base_price'],
             'sold_price' => $room['current_bid'],
             'team_name' => $sale_bidder ? $sale_bidder['team_name'] : null,
+            'team_logo' => $sale_bidder ? getTeamLogoPath($sale_bidder['team_name']) : null,
             'is_sold' => $room['current_bidder_id'] ? true : false
         ];
         
@@ -291,6 +320,21 @@ if ($current_player) {
             color: #60a5fa;
             margin: 2rem 0;
         }
+        /* Winner banner */
+        .winner-banner {
+            display: none;
+            margin-bottom: 1rem;
+            padding: 0.9rem 1rem;
+            border-radius: 10px;
+            background: linear-gradient(135deg, rgba(255,255,255,0.03), rgba(96,165,250,0.03));
+            border: 1px solid rgba(96,165,250,0.06);
+            color: white;
+            display: flex;
+            gap: 12px;
+            align-items: center;
+        }
+        .winner-banner img { width:44px;height:44px;border-radius:8px; }
+        .winner-banner .winner-text { font-weight:800; font-size:1.05rem; }
         .btn-start {
             padding: 1rem 3rem;
             background: linear-gradient(135deg, #34d399, #10b981);
@@ -721,6 +765,13 @@ if ($current_player) {
                 <div class="code"><?php echo htmlspecialchars($room['room_code']); ?></div>
             </div>
         </div>
+        <div id="winnerBannerRoom" class="winner-banner" role="status" aria-live="polite" style="display:none;">
+            <img id="winnerLogoRoom" src="" alt="winner logo" />
+            <div>
+                <div class="winner-text">The winner is <span id="winnerTeamNameRoom"></span></div>
+                <div class="winner-sub" style="color:#cbd5e1;font-weight:600;">Announcement from host</div>
+            </div>
+        </div>
 
         <div class="auction-layout">
             <!-- Participants Panel -->
@@ -728,11 +779,16 @@ if ($current_player) {
                 <h3>Participants (<?php echo count($participants); ?>/<?php echo $room['max_participants']; ?>)</h3>
                 <?php foreach ($participants as $p): ?>
                     <div class="participant-item <?php echo $p['is_host'] ? 'host' : ''; ?>" onclick="showParticipantDetails(<?php echo $p['participant_id']; ?>)" title="Click to view squad details">
-                        <div class="participant-name">
-                            <?php echo htmlspecialchars($p['team_name']); ?>
-                            <?php if ($p['is_host']): ?><span style="color: #fbbf24;"> 👑</span><?php endif; ?>
-                            <?php if ($p['user_id'] == $current_user['user_id']): ?><span style="color: #34d399;"> (You)</span><?php endif; ?>
-                        </div>
+                                <div class="participant-name">
+                                    <?php if (!empty($p['logo'])): ?>
+                                        <img src="<?php echo htmlspecialchars($p['logo']); ?>" alt="<?php echo htmlspecialchars($p['team_name']); ?> logo" style="width:36px;height:36px;vertical-align:middle;margin-right:8px;border-radius:6px;">
+                                    <?php else: ?>
+                                        <span style="font-size:1.25rem; margin-right:8px;">🏏</span>
+                                    <?php endif; ?>
+                                    <?php echo htmlspecialchars($p['team_name']); ?>
+                                    <?php if ($p['is_host']): ?><span style="color: #fbbf24;"> 👑</span><?php endif; ?>
+                                    <?php if ($p['user_id'] == $current_user['user_id']): ?><span style="color: #34d399;"> (You)</span><?php endif; ?>
+                                </div>
                         <div class="participant-budget">
                             💰 ₹<?php echo number_format($p['remaining_budget'] / 10000000, 2); ?> Cr
                             <br>
@@ -938,6 +994,11 @@ if ($current_player) {
                                     <?php if ($room['current_bidder_id'] == $player1_id): ?>
                                         <span style="font-size: 1.25rem;">👑</span>
                                     <?php endif; ?>
+                                    <?php if (!empty($player1['logo'])): ?>
+                                        <img src="<?php echo htmlspecialchars($player1['logo']); ?>" alt="<?php echo htmlspecialchars($player1['team_name']); ?> logo" style="width:34px;height:34px;vertical-align:middle;margin-right:8px;border-radius:6px;">
+                                    <?php else: ?>
+                                        <span style="font-size:1.1rem; margin-right:8px;">🏏</span>
+                                    <?php endif; ?>
                                     <span style="color: white; font-size: 1.1rem; font-weight: 700;"><?php echo htmlspecialchars($player1['team_name']); ?></span>
                                 </div>
                             </div>
@@ -955,6 +1016,11 @@ if ($current_player) {
                                     <?php if ($room['current_bidder_id'] == $player2_id): ?>
                                         <span style="font-size: 1.25rem;">👑</span>
                                     <?php endif; ?>
+                                    <?php if (!empty($player2['logo'])): ?>
+                                        <img src="<?php echo htmlspecialchars($player2['logo']); ?>" alt="<?php echo htmlspecialchars($player2['team_name']); ?> logo" style="width:34px;height:34px;vertical-align:middle;margin-right:8px;border-radius:6px;">
+                                    <?php else: ?>
+                                        <span style="font-size:1.1rem; margin-right:8px;">🏏</span>
+                                    <?php endif; ?>
                                     <span style="color: white; font-size: 1.1rem; font-weight: 700;"><?php echo htmlspecialchars($player2['team_name']); ?></span>
                                 </div>
                             </div>
@@ -970,7 +1036,14 @@ if ($current_player) {
                                 <span style="font-size: 2rem;">👑</span>
                                 <div>
                                     <div style="color: #60a5fa; font-size: 0.875rem; text-transform: uppercase; letter-spacing: 0.05em;">Leading Bid</div>
-                                    <div style="color: white; font-size: 1.5rem; font-weight: 700; margin-top: 0.25rem;"><?php echo htmlspecialchars($player1['team_name']); ?></div>
+                                    <div style="color: white; font-size: 1.5rem; font-weight: 700; margin-top: 0.25rem;">
+                                        <?php if (!empty($player1['logo'])): ?>
+                                            <img src="<?php echo htmlspecialchars($player1['logo']); ?>" alt="<?php echo htmlspecialchars($player1['team_name']); ?> logo" style="width:36px;height:36px;vertical-align:middle;margin-right:8px;border-radius:6px;">
+                                        <?php else: ?>
+                                            <span style="font-size:1.5rem; margin-right:8px;">🏏</span>
+                                        <?php endif; ?>
+                                        <?php echo htmlspecialchars($player1['team_name']); ?>
+                                    </div>
                                 </div>
                             </div>
                             <div style="border-top: 1px solid rgba(96, 165, 250, 0.2); padding-top: 1rem; margin-top: 1rem;">
@@ -1147,7 +1220,7 @@ if ($current_player) {
                 <div id="participantModal" class="modal" style="display: block;">
                     <div class="modal-content">
                         <div class="modal-header">
-                            <h2>🎯 ${participant.team_name}'s Squad</h2>
+                            <h2>${participant.logo ? `<img src="${participant.logo}" style="width:32px;height:32px;vertical-align:middle;margin-right:8px;border-radius:6px;">` : '🎯'} ${participant.team_name}'s Squad</h2>
                             <span class="close" onclick="closeModal()">&times;</span>
                         </div>
                         <div class="modal-body">
@@ -1259,7 +1332,7 @@ if ($current_player) {
             let detailsHTML = '';
             if (isSold) {
                 detailsHTML = `
-                    <div class="sale-team">🎯 ${data.team_name}</div>
+                    <div class="sale-team">${data.team_logo ? `<img src="${data.team_logo}" style="width:36px;height:36px;vertical-align:middle;margin-right:8px;border-radius:6px;">` : '🎯'} ${data.team_name}</div>
                     <div class="sale-price">₹${(data.sold_price / 10000000).toFixed(2)} Cr</div>
                     <div class="sale-details">Base Price: ₹${(data.base_price / 10000000).toFixed(2)} Cr</div>
                 `;
@@ -1381,6 +1454,25 @@ if ($current_player) {
         <?php else: ?>
         const serverExpiryTimestamp = null;
         <?php endif; ?>
+
+        // Poll room status for non-host participants; redirect to summary when host ends the auction
+        (function() {
+            const amHost = <?php echo $is_host ? 'true' : 'false'; ?>;
+            if (amHost) return;
+            const roomCheck = setInterval(async function() {
+                try {
+                    const resp = await fetch('../ajax/room_status.php?room_id=<?php echo $room_id; ?>');
+                    const data = await resp.json();
+                    if (data && data.success && (data.status === 'completed' || data.status === 'finished')) {
+                        // stop polling and redirect to summary
+                        clearInterval(roomCheck);
+                        window.location.href = 'auction-summary.php?room_id=<?php echo $room_id; ?>';
+                    }
+                } catch (e) {
+                    // ignore errors
+                }
+            }, 3000);
+        })();
         
         let timerInterval = null;
         
@@ -1555,6 +1647,51 @@ if ($current_player) {
         }
         
         <?php endif; ?>
+        // Announcement polling for winner broadcast
+        (function(){
+            const participants = <?php echo json_encode($participants); ?>;
+            const roomIdForAnn = '<?php echo intval($room_id); ?>';
+            let announced = false;
+
+            function showAnnouncementRoom(teamName, logo) {
+                try {
+                    const banner = document.getElementById('winnerBannerRoom');
+                    const tEl = document.getElementById('winnerTeamNameRoom');
+                    const lEl = document.getElementById('winnerLogoRoom');
+                    if (tEl) tEl.textContent = teamName;
+                    if (lEl) {
+                        if (logo) { lEl.src = logo; lEl.style.display = 'block'; } else { lEl.style.display = 'none'; }
+                    }
+                    if (banner) banner.style.display = 'flex';
+                    try {
+                        const utter = new SpeechSynthesisUtterance('The winner is ' + teamName);
+                        window.speechSynthesis.cancel();
+                        window.speechSynthesis.speak(utter);
+                    } catch (e) { console.warn('TTS not available', e); }
+                } catch (e) { console.error('Show announcement failed', e); }
+            }
+
+            async function checkAnnouncementRoom() {
+                try {
+                    const res = await fetch('../ajax/get_announcement.php?room_id=' + encodeURIComponent(roomIdForAnn));
+                    const data = await res.json();
+                    if (!data.success) return;
+                    if (data.has && data.announcement && !announced) {
+                        announced = true;
+                        const ann = data.announcement;
+                        const winning = participants.find(p => String(p.participant_id) === String(ann.winner_participant_id));
+                        const name = ann.winner_team || (winning ? winning.team_name : 'Winner');
+                        const logo = winning ? (winning.logo || '') : '';
+                        showAnnouncementRoom(name, logo);
+                    }
+                } catch (e) { /* ignore */ }
+            }
+
+            // start polling every 3s
+            setInterval(checkAnnouncementRoom, 3000);
+            // also run once immediately
+            checkAnnouncementRoom();
+        })();
     </script>
 </body>
 </html>
