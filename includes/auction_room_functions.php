@@ -274,7 +274,7 @@ function getNextPlayerForRoom($room_id, $group = null) {
                                SET current_player_id = {$player['player_id']}, 
                                    current_bid = {$player['base_price']}, 
                                    current_bidder_id = NULL,
-                                   bid_timer_expires_at = DATE_ADD(NOW(), INTERVAL 45 SECOND),
+                                   bid_timer_expires_at = DATE_ADD(NOW(), INTERVAL 20 SECOND),
                                    current_auction_group = 'Accelerated'
                                WHERE room_id = $room_id";
                 $conn->query($update_sql);
@@ -298,7 +298,7 @@ function getNextPlayerForRoom($room_id, $group = null) {
                                SET current_player_id = {$player['player_id']}, 
                                    current_bid = {$player['base_price']}, 
                                    current_bidder_id = NULL,
-                                   bid_timer_expires_at = DATE_ADD(NOW(), INTERVAL 45 SECOND),
+                                   bid_timer_expires_at = DATE_ADD(NOW(), INTERVAL 20 SECOND),
                                    current_auction_group = '$group'
                                WHERE room_id = $room_id";
                 $conn->query($update_sql);
@@ -330,7 +330,7 @@ function getNextPlayerForRoom($room_id, $group = null) {
                                SET current_player_id = {$player['player_id']}, 
                                    current_bid = {$player['base_price']}, 
                                    current_bidder_id = NULL,
-                                   bid_timer_expires_at = DATE_ADD(NOW(), INTERVAL 45 SECOND),
+                                   bid_timer_expires_at = DATE_ADD(NOW(), INTERVAL 20 SECOND),
                                    current_auction_group = '$grp'
                                WHERE room_id = $room_id";
                 $conn->query($update_sql);
@@ -359,7 +359,7 @@ function getNextPlayerForRoom($room_id, $group = null) {
                                SET current_player_id = {$player['player_id']}, 
                                    current_bid = {$player['base_price']}, 
                                    current_bidder_id = NULL,
-                                   bid_timer_expires_at = DATE_ADD(NOW(), INTERVAL 45 SECOND),
+                                   bid_timer_expires_at = DATE_ADD(NOW(), INTERVAL 20 SECOND),
                                    current_auction_group = 'Accelerated'
                                WHERE room_id = $room_id";
                 $conn->query($update_sql);
@@ -582,7 +582,7 @@ function resetBidTimer($room_id) {
     $conn = getDBConnection();
     $room_id = $conn->real_escape_string($room_id);
     
-    $sql = "UPDATE auction_rooms SET bid_timer_expires_at = DATE_ADD(NOW(), INTERVAL 45 SECOND) 
+    $sql = "UPDATE auction_rooms SET bid_timer_expires_at = DATE_ADD(NOW(), INTERVAL 20 SECOND) 
             WHERE room_id = $room_id";
     $conn->query($sql);
     
@@ -650,7 +650,7 @@ function getBidTimeRemaining($room_id) {
     }
     
     closeDBConnection($conn);
-    return 45; // Default 45 seconds
+    return 20; // Default 20 seconds
 }
 
 // Get players bought by a participant
@@ -688,7 +688,7 @@ function pauseAuctionRoom($room_id) {
     $sql = "SELECT TIMESTAMPDIFF(SECOND, NOW(), bid_timer_expires_at) as seconds_remaining 
             FROM auction_rooms WHERE room_id = $room_id";
     $result = $conn->query($sql);
-    $remaining = 45;
+    $remaining = 20;
     
     if ($result && $row = $result->fetch_assoc()) {
         $remaining = max(0, intval($row['seconds_remaining']));
@@ -716,10 +716,10 @@ function resumeAuctionRoom($room_id) {
     // Get the saved time remaining
     $sql = "SELECT paused_time_remaining FROM auction_rooms WHERE room_id = $room_id";
     $result = $conn->query($sql);
-    $remaining = 45;
+    $remaining = 20;
     
     if ($result && $row = $result->fetch_assoc()) {
-        $remaining = $row['paused_time_remaining'] ?? 45;
+        $remaining = $row['paused_time_remaining'] ?? 20;
     }
     
     // Resume with the saved time

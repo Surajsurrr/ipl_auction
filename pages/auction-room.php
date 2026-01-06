@@ -229,14 +229,14 @@ if ($room['current_player_id']) {
 }
 
 // Get time remaining for bid timer and Unix timestamp for JavaScript
-$time_remaining = 45;
+$time_remaining = 20;
 $timer_expires_timestamp = null;
 $paused_time = 0;
 
 if ($current_player) {
     if ($room['status'] == 'paused') {
         // Get saved paused time
-        $paused_time = $room['paused_time_remaining'] ?? 45;
+        $paused_time = $room['paused_time_remaining'] ?? 20;
         $time_remaining = $paused_time;
     } elseif ($room['status'] == 'active' || $room['status'] == 'in_progress') {
         $time_remaining = getBidTimeRemaining($room_id);
@@ -748,6 +748,20 @@ if ($current_player) {
 </head>
 <body>
     
+    <!-- Audio Enablement Overlay -->
+    <div id="audioEnableOverlay" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(15, 23, 42, 0.98); z-index: 10000; display: flex; align-items: center; justify-content: center; backdrop-filter: blur(10px);">
+        <div style="text-align: center; padding: 3rem; background: linear-gradient(135deg, rgba(96, 165, 250, 0.15), rgba(167, 139, 250, 0.15)); border-radius: 20px; border: 2px solid rgba(96, 165, 250, 0.3); max-width: 500px;">
+            <div style="font-size: 4rem; margin-bottom: 1.5rem;">🔊</div>
+            <h2 style="color: white; font-size: 1.75rem; margin-bottom: 1rem;">Enable Audio & Voice Announcements</h2>
+            <p style="color: #94a3b8; font-size: 1rem; margin-bottom: 2rem; line-height: 1.6;">
+                Click the button below to enable voice announcements for auction events including player sales, bids, and auction status updates.
+            </p>
+            <button id="enableAudioBtn" style="padding: 1rem 3rem; background: linear-gradient(135deg, #34d399, #10b981); color: white; border: none; border-radius: 12px; font-weight: 700; cursor: pointer; font-size: 1.25rem; box-shadow: 0 8px 20px rgba(16, 185, 129, 0.3); transition: all 0.3s;">
+                🎤 Enable Audio
+            </button>
+        </div>
+    </div>
+    
     <nav class="navbar">
         <div class="nav-container">
             <a href="../index.php" class="logo">🏏 IPL Auction</a>
@@ -1099,6 +1113,67 @@ if ($current_player) {
     </div>
 
     <script>
+        // ============================================================================
+        // AUDIO INITIALIZATION - Auto-enable speech and audio
+        // ============================================================================
+        let audioEnabled = false;
+        let audioContext = null;
+        
+        // Function to enable audio
+        function enableAudio() {
+            // Initialize AudioContext
+            if (!audioContext) {
+                audioContext = new (window.AudioContext || window.webkitAudioContext)();
+            }
+            
+            // Resume AudioContext if suspended
+            if (audioContext.state === 'suspended') {
+                audioContext.resume();
+            }
+            
+            // Initialize speech synthesis
+            if ('speechSynthesis' in window) {
+                // Trigger a silent utterance to warm up the speech engine
+                const warmup = new SpeechSynthesisUtterance('');
+                warmup.volume = 0;
+                window.speechSynthesis.speak(warmup);
+            }
+            
+            audioEnabled = true;
+            localStorage.setItem('ipl_auction_audio_enabled', 'true');
+            
+            const overlay = document.getElementById('audioEnableOverlay');
+            if (overlay) {
+                overlay.style.display = 'none';
+            }
+            
+            console.log('Audio and speech enabled');
+        }
+        
+        // Auto-initialize audio on page load
+        document.addEventListener('DOMContentLoaded', function() {
+            const overlay = document.getElementById('audioEnableOverlay');
+            const enableBtn = document.getElementById('enableAudioBtn');
+            
+            // Check if user has previously enabled audio
+            const previouslyEnabled = localStorage.getItem('ipl_auction_audio_enabled') === 'true';
+            
+            if (previouslyEnabled) {
+                // Auto-enable audio without showing overlay
+                enableAudio();
+            } else {
+                // Show overlay for first-time users
+                enableBtn.addEventListener('click', enableAudio);
+            }
+            
+            // Also enable on any user interaction (as fallback)
+            document.addEventListener('click', function enableOnClick() {
+                if (!audioEnabled) {
+                    enableAudio();
+                }
+            }, { once: true });
+        });
+        
         // ============================================================================
         // PARTICIPANT DETAILS MODAL - MUST BE DEFINED FIRST (called by inline onclick)
         // ============================================================================
@@ -1549,7 +1624,16 @@ if ($current_player) {
         // Fallback beep sound using Web Audio API
         function playBeepSound(isSold) {
             try {
-                const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                // Create context if not exists
+                if (!audioContext) {
+                    audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                }
+                
+                // Resume if suspended
+                if (audioContext.state === 'suspended') {
+                    audioContext.resume();
+                }
+                
                 const oscillator = audioContext.createOscillator();
                 const gainNode = audioContext.createGain();
                 
