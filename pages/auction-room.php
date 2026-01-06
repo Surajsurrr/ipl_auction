@@ -72,6 +72,12 @@ foreach ($participants as $idx => $pp) {
 $is_host = $room['created_by'] == $current_user['user_id'];
 $participant_id = $userCheck['participant_id'];
 
+// Load current player early (needed for bid action processing)
+$current_player = null;
+if ($room['current_player_id']) {
+    $current_player = getPlayerById($room['current_player_id']);
+}
+
 // Handle actions
 if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['action'])) {
     if ($_POST['action'] == 'start' && $is_host) {
@@ -89,14 +95,20 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['action'])) {
         header('Location: auction-room.php?room_id=' . $room_id);
         exit();
     } elseif ($_POST['action'] == 'bid') {
-        // Auto-increment based on current bid
-        $current_bid_cr = $room['current_bid'] / 10000000;
-        if ($current_bid_cr >= 3) {
-            $increment = 2000000; // 20L for bids above 3 Cr
+        // Check if this is the first bid (no current bidder and current_bid equals base_price)
+        if (!$room['current_bidder_id'] && $current_player && $room['current_bid'] == $current_player['base_price']) {
+            // First bid should be at base price (no increment)
+            $new_bid = $current_player['base_price'];
         } else {
-            $increment = 1000000; // 10L for bids below 3 Cr
+            // Auto-increment based on current bid for subsequent bids
+            $current_bid_cr = $room['current_bid'] / 10000000;
+            if ($current_bid_cr >= 3) {
+                $increment = 2000000; // 20L for bids above 3 Cr
+            } else {
+                $increment = 1000000; // 10L for bids below 3 Cr
+            }
+            $new_bid = $room['current_bid'] + $increment;
         }
-        $new_bid = $room['current_bid'] + $increment;
         $bid_result = placeBidInRoom($room_id, $participant_id, $new_bid);
         if (!$bid_result['success']) {
             $_SESSION['bid_error'] = $bid_result['message'];
@@ -221,11 +233,6 @@ if ($announce_auction_pause) {
 $announce_auction_resume = isset($_SESSION['announce_auction_resume']);
 if ($announce_auction_resume) {
     unset($_SESSION['announce_auction_resume']);
-}
-
-$current_player = null;
-if ($room['current_player_id']) {
-    $current_player = getPlayerById($room['current_player_id']);
 }
 
 // Get time remaining for bid timer and Unix timestamp for JavaScript

@@ -393,8 +393,11 @@ function placeBidInRoom($room_id, $participant_id, $bid_amount) {
         return ['success' => false, 'message' => 'Insufficient budget'];
     }
     
-    // Get current room info (include current_bidder_id for alternation check)
-    $room_sql = "SELECT current_player_id, current_bid, current_bidder_id, bidding_war_player1_id, bidding_war_player2_id FROM auction_rooms WHERE room_id = $room_id";
+    // Get current room info (include current_bidder_id for alternation check and base_price for first bid detection)
+    $room_sql = "SELECT r.current_player_id, r.current_bid, r.current_bidder_id, r.bidding_war_player1_id, r.bidding_war_player2_id, p.base_price 
+                 FROM auction_rooms r 
+                 LEFT JOIN players p ON r.current_player_id = p.player_id 
+                 WHERE r.room_id = $room_id";
     $room_result = $conn->query($room_sql);
     $room = $room_result->fetch_assoc();
     
@@ -404,7 +407,10 @@ function placeBidInRoom($room_id, $participant_id, $bid_amount) {
         return ['success' => false, 'message' => 'Please wait for other teams to bid before bidding again'];
     }
 
-    if ($bid_amount <= $room['current_bid']) {
+    // Check if this is the first bid (no current bidder and bid equals base price)
+    $is_first_bid = (!$room['current_bidder_id'] && $bid_amount == $room['base_price'] && $room['current_bid'] == $room['base_price']);
+    
+    if (!$is_first_bid && $bid_amount <= $room['current_bid']) {
         closeDBConnection($conn);
         return ['success' => false, 'message' => 'Bid must be higher than current bid'];
     }
