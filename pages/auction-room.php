@@ -1490,7 +1490,8 @@ if ($current_player) {
             document.body.insertAdjacentHTML('beforeend', notificationHTML);
             
             // Play sound using multiple methods for better compatibility
-            playSaleSound(status, isSold);
+            const speechText = isSold ? `Sold to ${data.team_name}` : status;
+            playSaleSound(speechText, isSold);
             
             // Auto-dismiss after 5 seconds
             setTimeout(() => {
