@@ -1273,6 +1273,7 @@ if ($current_player) {
         // ============================================================================
         const saleNotification = <?php echo $sale_notification ? json_encode($sale_notification) : 'null'; ?>;
         const shouldAnnounceNext = <?php echo $announce_next ? 'true' : 'false'; ?>;
+        const currentPlayerName = <?php echo $current_player ? json_encode($current_player['player_name']) : 'null'; ?>;
         
         console.log('Sale notification data:', saleNotification);
         console.log('Should announce next:', shouldAnnounceNext);
@@ -1300,12 +1301,12 @@ if ($current_player) {
         function speakNextPlayer() {
             console.log('Announcing next player');
             
-            // Play "Next Player" speech
-            if ('speechSynthesis' in window) {
+            // Play "Next Player [player name]" speech
+            if ('speechSynthesis' in window && currentPlayerName) {
                 window.speechSynthesis.cancel();
                 
                 setTimeout(() => {
-                    const utterance = new SpeechSynthesisUtterance('Next Player');
+                    const utterance = new SpeechSynthesisUtterance('Next Player, ' + currentPlayerName);
                     utterance.rate = 0.9;
                     utterance.pitch = 1.2;
                     utterance.volume = 1.0;
