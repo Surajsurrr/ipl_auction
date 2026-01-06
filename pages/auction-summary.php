@@ -40,8 +40,12 @@ if (!$room) {
 }
 
 // Only show summary after auction ends
-if ($room['status'] !== 'completed' && $room['status'] !== 'finished') {
-    echo "Auction is not finished yet. The summary will be available after the auction ends.";
+$status = strtolower(trim($room['status'] ?? ''));
+error_log("Auction Summary - Room ID: $room_id, Status: '$status', Raw Status: '{$room['status']}'");
+
+if ($status !== 'completed' && $status !== 'finished') {
+    echo "Auction is not finished yet. The summary will be available after the auction ends.<br>";
+    echo "Current status: " . htmlspecialchars($room['status']);
     exit;
 }
 
@@ -821,7 +825,12 @@ $teamClassMap = [
 
         // Start polling when chat is open
         // Open chat automatically for convenience on desktop
-        window.addEventListener('load', function(){ startPolling(); startAnnouncementPolling(); });
+        window.addEventListener('load', function(){ 
+            startPolling(); 
+            startAnnouncementPolling();
+            // Check for announcement immediately on page load
+            checkAnnouncement();
+        });
 
         // ----------------------- Voting functionality -----------------------
         const startVotingBtn = document.getElementById('startVoting');
