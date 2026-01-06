@@ -526,12 +526,100 @@ if ($current_player) {
         /* Activity Feed */
         .activity-panel {
             background: rgba(15, 23, 42, 0.95);
-            padding: 1.5rem;
+            padding: 0;
             border-radius: 15px;
             height: 600px;
-            overflow-y: auto;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
         }
         .activity-panel h3 { color: #60a5fa; margin-top: 0; }
+        
+        /* Tab Navigation */
+        .tab-nav {
+            display: flex;
+            background: rgba(255, 255, 255, 0.05);
+            border-bottom: 2px solid rgba(96, 165, 250, 0.3);
+        }
+        .tab-btn {
+            flex: 1;
+            padding: 1rem;
+            background: transparent;
+            border: none;
+            color: #94a3b8;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+            font-size: 0.875rem;
+        }
+        .tab-btn:hover {
+            background: rgba(96, 165, 250, 0.1);
+            color: #60a5fa;
+        }
+        .tab-btn.active {
+            background: rgba(96, 165, 250, 0.2);
+            color: #60a5fa;
+            border-bottom: 3px solid #60a5fa;
+        }
+        
+        /* Notification Badge */
+        .notification-badge {
+            display: inline-block;
+            background: linear-gradient(135deg, #ef4444, #dc2626);
+            color: white;
+            font-size: 0.7rem;
+            font-weight: 700;
+            padding: 0.15rem 0.5rem;
+            border-radius: 12px;
+            margin-left: 0.5rem;
+            min-width: 20px;
+            text-align: center;
+            animation: pulse 2s infinite;
+        }
+        @keyframes pulse {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.1); }
+        }
+        
+        /* Chat Notification Toast */
+        .chat-notification {
+            position: fixed;
+            top: 100px;
+            right: 30px;
+            background: linear-gradient(135deg, #3b82f6, #2563eb);
+            color: white;
+            padding: 1rem 1.5rem;
+            border-radius: 12px;
+            box-shadow: 0 8px 30px rgba(59, 130, 246, 0.4);
+            z-index: 9999;
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            animation: slideIn 0.3s ease-out;
+            max-width: 350px;
+        }
+        @keyframes slideIn {
+            from { transform: translateX(400px); opacity: 0; }
+            to { transform: translateX(0); opacity: 1; }
+        }
+        .chat-notification.fadeOut {
+            animation: slideOut 0.3s ease-out forwards;
+        }
+        @keyframes slideOut {
+            from { transform: translateX(0); opacity: 1; }
+            to { transform: translateX(400px); opacity: 0; }
+        }
+        
+        .tab-content {
+            display: none;
+            flex: 1;
+            overflow-y: auto;
+            padding: 1.5rem;
+        }
+        .tab-content.active {
+            display: block;
+        }
+        
         .activity-item {
             padding: 1rem;
             background: rgba(255, 255, 255, 0.05);
@@ -1035,9 +1123,16 @@ if ($current_player) {
                 <?php endif; ?>
             </div>
 
-            <!-- Current Bidder Panel -->
+            <!-- Current Bidder Panel with Tabs -->
             <div class="activity-panel">
-                <h3>Bidding War</h3>
+                <!-- Tab Navigation -->
+                <div class="tab-nav">
+                    <button class="tab-btn active" onclick="switchTab('bidding')">⚔️ Bidding War</button>
+                    <button class="tab-btn" onclick="switchTab('chat')">💬 Live Chat<span id="chatBadge" class="notification-badge" style="display: none;">0</span></button>
+                </div>
+
+                <!-- Bidding War Tab -->
+                <div id="biddingTab" class="tab-content active">
                 <?php if ($current_player): ?>
                     <?php 
                     $player1_id = $room['bidding_war_player1_id'];
@@ -1141,6 +1236,19 @@ if ($current_player) {
                         <div style="color: #64748b; font-size: 0.875rem;">No active player</div>
                     </div>
                 <?php endif; ?>
+                </div>
+
+                <!-- Chat Tab -->
+                <div id="chatTab" class="tab-content">
+                    <h3 style="color: #60a5fa; margin-top: 0;">💬 Live Chat</h3>
+                    <div id="chatMessages" style="background: rgba(15, 23, 42, 0.6); border-radius: 10px; padding: 1rem; height: 380px; overflow-y: auto; margin-bottom: 1rem; display: flex; flex-direction: column; gap: 0.75rem;">
+                        <div style="color: #64748b; text-align: center; font-size: 0.875rem; padding: 2rem;">Loading messages...</div>
+                    </div>
+                    <form id="chatForm" style="display: flex; gap: 0.5rem;">
+                        <input type="text" id="chatInput" placeholder="Type a message..." style="flex: 1; padding: 0.75rem; background: rgba(255, 255, 255, 0.05); border: 2px solid rgba(96, 165, 250, 0.3); border-radius: 8px; color: white; font-size: 0.875rem;" maxlength="200" autocomplete="off">
+                        <button type="submit" style="padding: 0.75rem 1.5rem; background: linear-gradient(135deg, #3b82f6, #2563eb); color: white; border: none; border-radius: 8px; font-weight: 600; cursor: pointer; font-size: 0.875rem;">Send</button>
+                    </form>
+                </div>
             </div>
         </div>
     </div>
@@ -1943,6 +2051,232 @@ if ($current_player) {
             // also run once immediately
             checkAnnouncementRoom();
         })();
+
+        // ============================================================================
+        // TAB SWITCHING
+        // ============================================================================
+        let currentTab = 'bidding';
+        
+        function switchTab(tabName) {
+            currentTab = tabName;
+            
+            // Hide all tabs
+            document.getElementById('biddingTab').classList.remove('active');
+            document.getElementById('chatTab').classList.remove('active');
+            
+            // Remove active class from all buttons
+            document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
+            
+            // Show selected tab
+            if (tabName === 'bidding') {
+                document.getElementById('biddingTab').classList.add('active');
+                document.querySelectorAll('.tab-btn')[0].classList.add('active');
+            } else if (tabName === 'chat') {
+                document.getElementById('chatTab').classList.add('active');
+                document.querySelectorAll('.tab-btn')[1].classList.add('active');
+                
+                // Clear notification badge when opening chat
+                clearChatBadge();
+            }
+        }
+
+        // ============================================================================
+        // CHAT FUNCTIONALITY
+        // ============================================================================
+        const roomId = <?php echo $room_id; ?>;
+        const currentUserId = <?php echo $current_user['user_id']; ?>;
+        const chatMessages = document.getElementById('chatMessages');
+        const chatForm = document.getElementById('chatForm');
+        const chatInput = document.getElementById('chatInput');
+        const chatBadge = document.getElementById('chatBadge');
+        
+        let lastMessageCount = 0;
+        let unreadCount = 0;
+
+        // Clear chat badge
+        function clearChatBadge() {
+            unreadCount = 0;
+            chatBadge.style.display = 'none';
+            chatBadge.textContent = '0';
+        }
+
+        // Update chat badge
+        function updateChatBadge(count) {
+            if (count > 0) {
+                unreadCount = count;
+                chatBadge.textContent = count > 99 ? '99+' : count;
+                chatBadge.style.display = 'inline-block';
+            } else {
+                clearChatBadge();
+            }
+        }
+
+        // Show chat notification
+        function showChatNotification(message, senderName) {
+            // Don't show notification if chat tab is active
+            if (currentTab === 'chat') return;
+            
+            // Create notification element
+            const notification = document.createElement('div');
+            notification.className = 'chat-notification';
+            notification.innerHTML = `
+                <div style="font-size: 2rem;">💬</div>
+                <div style="flex: 1;">
+                    <div style="font-weight: 700; font-size: 0.875rem; margin-bottom: 0.25rem;">${escapeHtml(senderName)}</div>
+                    <div style="font-size: 0.875rem; opacity: 0.9;">${escapeHtml(message.substring(0, 50))}${message.length > 50 ? '...' : ''}</div>
+                </div>
+            `;
+            
+            // Add to page
+            document.body.appendChild(notification);
+            
+            // Play notification sound
+            playNotificationSound();
+            
+            // Auto-remove after 4 seconds
+            setTimeout(() => {
+                notification.classList.add('fadeOut');
+                setTimeout(() => notification.remove(), 300);
+            }, 4000);
+            
+            // Click to open chat
+            notification.onclick = function() {
+                switchTab('chat');
+                notification.remove();
+            };
+        }
+
+        // Play notification sound
+        function playNotificationSound() {
+            try {
+                if (!audioContext) {
+                    audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                }
+                
+                const oscillator = audioContext.createOscillator();
+                const gainNode = audioContext.createGain();
+                
+                oscillator.connect(gainNode);
+                gainNode.connect(audioContext.destination);
+                
+                oscillator.frequency.value = 600;
+                oscillator.type = 'sine';
+                
+                gainNode.gain.setValueAtTime(0.1, audioContext.currentTime);
+                gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.2);
+                
+                oscillator.start(audioContext.currentTime);
+                oscillator.stop(audioContext.currentTime + 0.2);
+            } catch (e) {
+                console.log('Notification sound failed:', e);
+            }
+        }
+
+        // Format timestamp
+        function formatTime(timestamp) {
+            const date = new Date(timestamp * 1000);
+            const hours = date.getHours().toString().padStart(2, '0');
+            const minutes = date.getMinutes().toString().padStart(2, '0');
+            return hours + ':' + minutes;
+        }
+
+        // Render messages
+        function renderMessages(messages) {
+            if (!messages || messages.length === 0) {
+                chatMessages.innerHTML = '<div style="color: #64748b; text-align: center; font-size: 0.875rem; padding: 2rem;">No messages yet. Start the conversation!</div>';
+                return;
+            }
+
+            chatMessages.innerHTML = messages.map(msg => {
+                const isOwn = msg.user_id == currentUserId;
+                const bgColor = isOwn ? 'rgba(59, 130, 246, 0.15)' : 'rgba(255, 255, 255, 0.05)';
+                const borderColor = isOwn ? '#3b82f6' : 'transparent';
+                const align = isOwn ? 'flex-end' : 'flex-start';
+                
+                return `
+                    <div style="display: flex; flex-direction: column; align-items: ${align}; max-width: 85%;">
+                        <div style="background: ${bgColor}; padding: 0.75rem; border-radius: 10px; border: 1px solid ${borderColor}; width: fit-content;">
+                            <div style="color: #60a5fa; font-size: 0.75rem; font-weight: 600; margin-bottom: 0.25rem;">${msg.full_name}</div>
+                            <div style="color: white; font-size: 0.875rem; word-wrap: break-word;">${escapeHtml(msg.message)}</div>
+                            <div style="color: #64748b; font-size: 0.7rem; margin-top: 0.25rem;">${formatTime(msg.timestamp)}</div>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+
+            // Auto-scroll to bottom
+            chatMessages.scrollTop = chatMessages.scrollHeight;
+        }
+
+        // Escape HTML
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        // Fetch messages
+        async function fetchMessages() {
+            try {
+                const response = await fetch('../ajax/get_chat.php?room_id=' + roomId);
+                const data = await response.json();
+                if (data.success) {
+                    const messages = data.messages || [];
+                    
+                    // Check for new messages
+                    if (messages.length > lastMessageCount && lastMessageCount > 0) {
+                        const newMessagesCount = messages.length - lastMessageCount;
+                        
+                        // Check if any new message is from another user
+                        const newMessages = messages.slice(-newMessagesCount);
+                        const hasNewFromOthers = newMessages.some(msg => msg.user_id != currentUserId);
+                        
+                        if (hasNewFromOthers && currentTab !== 'chat') {
+                            // Update badge
+                            unreadCount += newMessagesCount;
+                            updateChatBadge(unreadCount);
+                            
+                            // Show notification for the last new message from others
+                            const lastNewFromOther = newMessages.filter(msg => msg.user_id != currentUserId).pop();
+                            if (lastNewFromOther) {
+                                showChatNotification(lastNewFromOther.message, lastNewFromOther.full_name);
+                            }
+                        }
+                    }
+                    
+                    lastMessageCount = messages.length;
+                    renderMessages(messages);
+                }
+            } catch (e) {
+                console.error('Error fetching messages:', e);
+            }
+        }
+
+        // Send message
+        chatForm.addEventListener('submit', async function(e) {
+            e.preventDefault();
+            const message = chatInput.value.trim();
+            if (!message) return;
+
+            try {
+                const response = await fetch('../ajax/send_chat.php', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ room_id: roomId, message: message })
+                });
+                const data = await response.json();
+                if (data.success) {
+                    chatInput.value = '';
+                    fetchMessages();
+                }
+            } catch (e) {
+                console.error('Error sending message:', e);
+            }
+        });
+
+        // Poll for new messages every 2 seconds
+        setInterval(fetchMessages, 2000);
+        fetchMessages(); // Initial load
     </script>
 </body>
 </html>
