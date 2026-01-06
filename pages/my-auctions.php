@@ -290,14 +290,59 @@ $rooms = getUserRooms($current_user['user_id']);
                         </div>
                         
                         <div class="room-actions">
-                            <a href="auction-room.php?room_id=<?php echo $room['room_id']; ?>" class="btn-enter">
-                                <?php echo $room['status'] == 'waiting' ? 'Enter Waiting Room' : 'Enter Auction'; ?>
-                            </a>
-                            <form method="POST" style="margin:0;">
-                                <input type="hidden" name="action" value="delete_room">
-                                <input type="hidden" name="room_id" value="<?php echo $room['room_id']; ?>">
-                                <button type="submit" class="btn" style="background: linear-gradient(135deg, #ef4444, #dc2626); color: white; border-radius:10px; padding:0.8rem 1rem;" onclick="return confirm('Are you sure you want to delete this auction room? This cannot be undone.');">🗑️ Delete</button>
-                            </form>
+                            <?php
+                                // Check for announcement file for this room
+                                $announceFile = __DIR__ . '/../data/announcements/announcement_room_' . intval($room['room_id']) . '.json';
+                                $winnerTeam = null;
+                                $winnerLogo = null;
+                                if (file_exists($announceFile)) {
+                                    $af = @file_get_contents($announceFile);
+                                    $ad = json_decode($af, true);
+                                    if ($ad && !empty($ad['winner_team'])) {
+                                        $winnerTeam = $ad['winner_team'];
+                                        // attempt to resolve logo by team name fragments
+                                        $logoMap = [
+                                            'Chennai' => '../assets/images/teams/csk.png',
+                                            'Delhi' => '../assets/images/teams/dc.png',
+                                            'Mumbai' => '../assets/images/teams/mi.png',
+                                            'Kolkata' => '../assets/images/teams/kkr.png',
+                                            'Gujarat' => '../assets/images/teams/gt.png',
+                                            'Royal' => '../assets/images/teams/rcb.png',
+                                            'Rajasthan' => '../assets/images/teams/rr.png',
+                                            'Sunrisers' => '../assets/images/teams/srh.png',
+                                            'Lucknow' => '../assets/images/teams/lsg.png',
+                                            'Punjab' => '../assets/images/teams/pbks.png'
+                                        ];
+                                        foreach ($logoMap as $k => $p) {
+                                            if (stripos($winnerTeam, $k) !== false) { $winnerLogo = $p; break; }
+                                        }
+                                    }
+                                }
+
+                                // If auction finished and announcement exists, show winner instead of actions
+                                if (($room['status'] === 'completed' || $room['status'] === 'finished') && $winnerTeam) :
+                            ?>
+                                <div style="display:flex;align-items:center;gap:12px;">
+                                    <?php if ($winnerLogo): ?>
+                                        <img src="<?php echo htmlspecialchars($winnerLogo); ?>" alt="<?php echo htmlspecialchars($winnerTeam); ?>" style="width:56px;height:56px;border-radius:8px;object-fit:cover;box-shadow:0 8px 20px rgba(0,0,0,0.12);">
+                                    <?php else: ?>
+                                        <div style="width:56px;height:56px;border-radius:8px;background:#f3f4f6;display:flex;align-items:center;justify-content:center;font-weight:800;color:#111827;">🏆</div>
+                                    <?php endif; ?>
+                                    <div>
+                                        <div style="font-weight:800;color:#0f172a;">Winner</div>
+                                        <div style="font-weight:700;font-size:1.05rem;color:#1f2937;"><?php echo htmlspecialchars($winnerTeam); ?></div>
+                                    </div>
+                                </div>
+                            <?php else: ?>
+                                <a href="auction-room.php?room_id=<?php echo $room['room_id']; ?>" class="btn-enter">
+                                    <?php echo $room['status'] == 'waiting' ? 'Enter Waiting Room' : 'Enter Auction'; ?>
+                                </a>
+                                <form method="POST" style="margin:0;">
+                                    <input type="hidden" name="action" value="delete_room">
+                                    <input type="hidden" name="room_id" value="<?php echo $room['room_id']; ?>">
+                                    <button type="submit" class="btn" style="background: linear-gradient(135deg, #ef4444, #dc2626); color: white; border-radius:10px; padding:0.8rem 1rem;" onclick="return confirm('Are you sure you want to delete this auction room? This cannot be undone.');">🗑️ Delete</button>
+                                </form>
+                            <?php endif; ?>
                         </div>
                     </div>
                 <?php endforeach; ?>
