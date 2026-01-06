@@ -300,37 +300,47 @@ $rooms = getUserRooms($current_user['user_id']);
                                     $ad = json_decode($af, true);
                                     if ($ad && !empty($ad['winner_team'])) {
                                         $winnerTeam = $ad['winner_team'];
-                                        // attempt to resolve logo by team name fragments
-                                        $logoMap = [
-                                            'Chennai' => '../assets/images/teams/csk.png',
-                                            'Delhi' => '../assets/images/teams/dc.png',
-                                            'Mumbai' => '../assets/images/teams/mi.png',
-                                            'Kolkata' => '../assets/images/teams/kkr.png',
-                                            'Gujarat' => '../assets/images/teams/gt.png',
-                                            'Royal' => '../assets/images/teams/rcb.png',
-                                            'Rajasthan' => '../assets/images/teams/rr.png',
-                                            'Sunrisers' => '../assets/images/teams/srh.png',
-                                            'Lucknow' => '../assets/images/teams/lsg.png',
-                                            'Punjab' => '../assets/images/teams/pbks.png'
-                                        ];
-                                        foreach ($logoMap as $k => $p) {
-                                            if (stripos($winnerTeam, $k) !== false) { $winnerLogo = $p; break; }
-                                        }
+                                    }
+                                }
+                                
+                                // If no announcement file but single-participant completed auction, auto-detect winner
+                                $isFinished = (strtolower($room['status']) === 'completed' || strtolower($room['status']) === 'finished');
+                                if (!$winnerTeam && $isFinished && $room['participants_count'] == 1) {
+                                    // Single participant auction - they are the winner
+                                    $winnerTeam = $room['my_team_name'];
+                                }
+                                
+                                // Resolve logo if we have a winner
+                                if ($winnerTeam) {
+                                    $logoMap = [
+                                        'Chennai' => '../assets/images/teams/csk.png',
+                                        'Delhi' => '../assets/images/teams/dc.png',
+                                        'Mumbai' => '../assets/images/teams/mi.png',
+                                        'Kolkata' => '../assets/images/teams/kkr.png',
+                                        'Gujarat' => '../assets/images/teams/gt.png',
+                                        'Royal' => '../assets/images/teams/rcb.png',
+                                        'Rajasthan' => '../assets/images/teams/rr.png',
+                                        'Sunrisers' => '../assets/images/teams/srh.png',
+                                        'Lucknow' => '../assets/images/teams/lsg.png',
+                                        'Punjab' => '../assets/images/teams/pbks.png'
+                                    ];
+                                    foreach ($logoMap as $k => $p) {
+                                        if (stripos($winnerTeam, $k) !== false) { $winnerLogo = $p; break; }
                                     }
                                 }
 
-                                // If auction finished and announcement exists, show winner instead of actions
-                                if (($room['status'] === 'completed' || $room['status'] === 'finished') && $winnerTeam) :
+                                // If auction finished and we have a winner, show winner instead of actions
+                                if ($isFinished && $winnerTeam) :
                             ?>
-                                <div style="display:flex;align-items:center;gap:12px;">
+                                <div style="display:flex;align-items:center;gap:12px;padding:1rem;background:linear-gradient(135deg,rgba(16,185,129,0.1),rgba(5,150,105,0.05));border-radius:12px;border:2px solid #10b981;">
                                     <?php if ($winnerLogo): ?>
-                                        <img src="<?php echo htmlspecialchars($winnerLogo); ?>" alt="<?php echo htmlspecialchars($winnerTeam); ?>" style="width:56px;height:56px;border-radius:8px;object-fit:cover;box-shadow:0 8px 20px rgba(0,0,0,0.12);">
+                                        <img src="<?php echo htmlspecialchars($winnerLogo); ?>" alt="<?php echo htmlspecialchars($winnerTeam); ?>" style="width:64px;height:64px;border-radius:10px;object-fit:cover;box-shadow:0 8px 20px rgba(16,185,129,0.3);">
                                     <?php else: ?>
-                                        <div style="width:56px;height:56px;border-radius:8px;background:#f3f4f6;display:flex;align-items:center;justify-content:center;font-weight:800;color:#111827;">🏆</div>
+                                        <div style="width:64px;height:64px;border-radius:10px;background:linear-gradient(135deg,#fbbf24,#f59e0b);display:flex;align-items:center;justify-content:center;font-size:2rem;box-shadow:0 8px 20px rgba(251,191,36,0.3);">🏆</div>
                                     <?php endif; ?>
-                                    <div>
-                                        <div style="font-weight:800;color:#0f172a;">Winner</div>
-                                        <div style="font-weight:700;font-size:1.05rem;color:#1f2937;"><?php echo htmlspecialchars($winnerTeam); ?></div>
+                                    <div style="flex:1;">
+                                        <div style="font-weight:800;color:#059669;font-size:0.75rem;text-transform:uppercase;letter-spacing:0.05em;margin-bottom:0.25rem;">🎉 Winner</div>
+                                        <div style="font-weight:800;font-size:1.15rem;color:#0f172a;"><?php echo htmlspecialchars($winnerTeam); ?></div>
                                     </div>
                                 </div>
                             <?php else: ?>

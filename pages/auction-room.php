@@ -175,7 +175,33 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['action'])) {
         try {
             $conn = getDBConnection();
             $room_id_safe = $conn->real_escape_string($room_id);
-            $conn->query("UPDATE auction_rooms SET status = 'completed' WHERE room_id = $room_id_safe");
+            
+            // Check if this is a single-participant auction
+            $participants = getRoomParticipants($room_id);
+            if (count($participants) == 1) {
+                // Auto-announce the single participant as winner
+                $winner = $participants[0];
+                $winner_pid = $winner['participant_id'];
+                $winner_team = $winner['team_name'];
+                $winner_team_esc = $conn->real_escape_string($winner_team);
+                
+                // Update room status to finished with winner info
+                $conn->query("UPDATE auction_rooms SET status = 'finished', ended_at = NOW(), winner_participant_id = $winner_pid, winner_team = '$winner_team_esc', winner_announced_at = NOW() WHERE room_id = $room_id_safe");
+                
+                // Create announcement file
+                $annDir = __DIR__ . '/../data/announcements';
+                if (!is_dir($annDir)) @mkdir($annDir, 0755, true);
+                $announceData = [
+                    'winner_participant_id' => $winner_pid,
+                    'winner_team' => $winner_team,
+                    'timestamp' => time()
+                ];
+                @file_put_contents($annDir . '/announcement_room_' . $room_id . '.json', json_encode($announceData));
+            } else {
+                // Multi-participant auction - set to completed for voting
+                $conn->query("UPDATE auction_rooms SET status = 'completed' WHERE room_id = $room_id_safe");
+            }
+            
             closeDBConnection($conn);
         } catch (Exception $e) {
             error_log('Error ending auction: ' . $e->getMessage());
