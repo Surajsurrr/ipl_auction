@@ -12,6 +12,22 @@ if ($selected_team_id) {
     $team_players = getTeamPlayers($selected_team_id);
     $team_stats = getTeamStatistics($selected_team_id);
 }
+
+// Compute championships from announcement files as authoritative source for UI
+$announcementCounts = [];
+$annDir = __DIR__ . '/../data/announcements';
+if (is_dir($annDir)) {
+    $files = glob($annDir . '/announcement_room_*.json');
+    foreach ($files as $f) {
+        $c = @file_get_contents($f);
+        $d = json_decode($c, true);
+        if (!$d) continue;
+        $team = $d['winner_team'] ?? null;
+        if (!$team) continue;
+        if (!isset($announcementCounts[$team])) $announcementCounts[$team] = 0;
+        $announcementCounts[$team]++;
+    }
+}
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -276,7 +292,13 @@ if ($selected_team_id) {
                     }
                 }
                 
-                $championships = isset($team['championships']) ? intval($team['championships']) : 0;
+                // Prefer announcement-derived counts (reflects actual announced winners)
+                $championships = 0;
+                if (!empty($announcementCounts[$team['team_name']])) {
+                    $championships = intval($announcementCounts[$team['team_name']]);
+                } else {
+                    $championships = isset($team['championships']) ? intval($team['championships']) : 0;
+                }
                 $index++;
             ?>
                 <div class="team-showcase-card" style="animation-delay: <?php echo $index * 0.1; ?>s; background: <?php echo $card_color; ?>;">

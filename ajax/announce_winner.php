@@ -80,16 +80,47 @@ $winnerTeamName = $winnerParticipant['team_name'];
 
 // Increment championships for team (use team_name match)
 $conn = getDBConnection();
-$team_name_esc = $conn->real_escape_string($winnerTeamName);
+// Make sure we only award championships once per room
+$room_id_safe = intval($room_id);
+$room_check_sql = "SELECT winner_participant_id FROM auction_rooms WHERE room_id = $room_id_safe";
+$result = $conn->query($room_check_sql);
+$room_row = $result ? $result->fetch_assoc() : null;
+if ($room_row && !empty($room_row['winner_participant_id'])) {
+    // already announced for this room
+    if (intval($room_row['winner_participant_id']) === $winningPid) {
+        // still write broadcast file (idempotent) and return success
+        $annDir = __DIR__ . '/../data/announcements';
+        if (!is_dir($annDir)) @mkdir($annDir, 0755, true);
+        $announceData = [
+            'winner_participant_id' => $winningPid,
+            'winner_team' => $winnerTeamName,
+            'timestamp' => time()
+        ];
+        @file_put_contents($annDir . '/announcement_room_' . $room_id . '.json', json_encode($announceData));
+        closeDBConnection($conn);
+        echo json_encode(['success' => true, 'winner_team' => $winnerTeamName, 'winner_participant_id' => $winningPid, 'already_announced' => true]);
+        exit;
+    } else {
+        closeDBConnection($conn);
+        echo json_encode(['success' => false, 'error' => 'A different winner was already recorded for this room']);
+        exit;
+    }
+}
 
+$team_name_esc = $conn->real_escape_string($winnerTeamName);
 // Ensure championships column exists by attempting to add if missing (safe to run)
 $conn->query("ALTER TABLE teams ADD COLUMN IF NOT EXISTS championships INT DEFAULT 0");
 
-$update_sql = "UPDATE teams SET championships = IFNULL(championships,0) + 1 WHERE team_name = '$team_name_esc'";
-if ($conn->query($update_sql)) {
-    // Optionally record announcement in room (status or note)
-    $note_sql = "UPDATE auction_rooms SET status = 'finished', ended_at = NOW() WHERE room_id = " . intval($room_id);
-    $conn->query($note_sql);
+// Increment the team's championships and record winner in auction_rooms atomically
+$conn->begin_transaction();
+try {
+    $update_sql = "UPDATE teams SET championships = IFNULL(championships,0) + 1 WHERE team_name = '$team_name_esc'";
+    if (!$conn->query($update_sql)) throw new Exception($conn->error);
+
+    $note_sql = "UPDATE auction_rooms SET status = 'finished', ended_at = NOW(), winner_participant_id = $winningPid, winner_team = '$team_name_esc', winner_announced_at = NOW() WHERE room_id = $room_id_safe";
+    if (!$conn->query($note_sql)) throw new Exception($conn->error);
+
+    $conn->commit();
     // write broadcast announcement file so clients can pick it up
     $annDir = __DIR__ . '/../data/announcements';
     if (!is_dir($annDir)) @mkdir($annDir, 0755, true);
@@ -102,8 +133,9 @@ if ($conn->query($update_sql)) {
     closeDBConnection($conn);
     echo json_encode(['success' => true, 'winner_team' => $winnerTeamName, 'winner_participant_id' => $winningPid]);
     exit;
-} else {
-    $err = $conn->error;
+} catch (Exception $e) {
+    $conn->rollback();
+    $err = $e->getMessage();
     closeDBConnection($conn);
     echo json_encode(['success' => false, 'error' => 'DB update failed: ' . $err]);
     exit;
