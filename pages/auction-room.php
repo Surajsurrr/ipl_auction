@@ -78,6 +78,8 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['action'])) {
         startAuctionRoom($room_id, $current_user['user_id']);
         // Automatically select first player
         getNextPlayerForRoom($room_id, null);
+        // Set flag to announce auction start
+        $_SESSION['announce_auction_start'] = true;
         header('Location: auction-room.php?room_id=' . $room_id);
         exit();
     } elseif ($_POST['action'] == 'next_player') {
@@ -144,12 +146,16 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['action'])) {
         // Pause the auction - save current state
         error_log("PAUSE ACTION TRIGGERED by user: " . $current_user['user_id']);
         pauseAuctionRoom($room_id);
+        // Set flag to announce pause
+        $_SESSION['announce_auction_pause'] = true;
         error_log("Pause completed, redirecting...");
         header('Location: auction-room.php?room_id=' . $room_id);
         exit();
     } elseif ($_POST['action'] == 'resume' && $is_host) {
         // Resume the auction from paused state
         resumeAuctionRoom($room_id);
+        // Set flag to announce resume
+        $_SESSION['announce_auction_resume'] = true;
         header('Location: auction-room.php?room_id=' . $room_id);
         exit();
     } elseif ($_POST['action'] == 'end_auction' && $is_host) {
@@ -197,6 +203,24 @@ if (isset($_SESSION['sale_notification'])) {
 $announce_next = isset($_SESSION['announce_next_player']);
 if ($announce_next) {
     unset($_SESSION['announce_next_player']);
+}
+
+// Check for auction start announcement
+$announce_auction_start = isset($_SESSION['announce_auction_start']);
+if ($announce_auction_start) {
+    unset($_SESSION['announce_auction_start']);
+}
+
+// Check for auction pause announcement
+$announce_auction_pause = isset($_SESSION['announce_auction_pause']);
+if ($announce_auction_pause) {
+    unset($_SESSION['announce_auction_pause']);
+}
+
+// Check for auction resume announcement
+$announce_auction_resume = isset($_SESSION['announce_auction_resume']);
+if ($announce_auction_resume) {
+    unset($_SESSION['announce_auction_resume']);
 }
 
 $current_player = null;
@@ -1273,15 +1297,45 @@ if ($current_player) {
         // ============================================================================
         const saleNotification = <?php echo $sale_notification ? json_encode($sale_notification) : 'null'; ?>;
         const shouldAnnounceNext = <?php echo $announce_next ? 'true' : 'false'; ?>;
+        const shouldAnnounceAuctionStart = <?php echo $announce_auction_start ? 'true' : 'false'; ?>;
+        const shouldAnnounceAuctionPause = <?php echo $announce_auction_pause ? 'true' : 'false'; ?>;
+        const shouldAnnounceAuctionResume = <?php echo $announce_auction_resume ? 'true' : 'false'; ?>;
         const currentPlayerName = <?php echo $current_player ? json_encode($current_player['player_name']) : 'null'; ?>;
         
         console.log('Sale notification data:', saleNotification);
         console.log('Should announce next:', shouldAnnounceNext);
+        console.log('Should announce auction start:', shouldAnnounceAuctionStart);
+        console.log('Should announce auction pause:', shouldAnnounceAuctionPause);
+        console.log('Should announce auction resume:', shouldAnnounceAuctionResume);
         
         // Show sale notification if exists
         if (saleNotification) {
             console.log('Showing sale notification...');
             showSaleNotification(saleNotification);
+        }
+        
+        // Announce auction start
+        if (shouldAnnounceAuctionStart) {
+            console.log('Announcing auction start...');
+            setTimeout(() => {
+                speakAuctionStart();
+            }, 500);
+        }
+        
+        // Announce auction pause
+        if (shouldAnnounceAuctionPause) {
+            console.log('Announcing auction pause...');
+            setTimeout(() => {
+                speakAuctionPause();
+            }, 500);
+        }
+        
+        // Announce auction resume
+        if (shouldAnnounceAuctionResume) {
+            console.log('Announcing auction resume...');
+            setTimeout(() => {
+                speakAuctionResume();
+            }, 500);
         }
         
         // Announce next player after sale notification
@@ -1296,6 +1350,84 @@ if ($current_player) {
             setTimeout(() => {
                 speakNextPlayer();
             }, 500);
+        }
+        
+        function speakAuctionStart() {
+            console.log('Announcing auction start');
+            
+            if ('speechSynthesis' in window) {
+                window.speechSynthesis.cancel();
+                
+                setTimeout(() => {
+                    const utterance = new SpeechSynthesisUtterance('The auction begins');
+                    utterance.rate = 0.9;
+                    utterance.pitch = 1.2;
+                    utterance.volume = 1.0;
+                    utterance.lang = 'en-US';
+                    
+                    utterance.onstart = function() {
+                        console.log('Auction start announcement started');
+                    };
+                    
+                    utterance.onerror = function(event) {
+                        console.error('Auction start announcement error:', event);
+                    };
+                    
+                    window.speechSynthesis.speak(utterance);
+                }, 100);
+            }
+        }
+        
+        function speakAuctionPause() {
+            console.log('Announcing auction pause');
+            
+            if ('speechSynthesis' in window) {
+                window.speechSynthesis.cancel();
+                
+                setTimeout(() => {
+                    const utterance = new SpeechSynthesisUtterance('Auction is paused by the host');
+                    utterance.rate = 0.9;
+                    utterance.pitch = 1.2;
+                    utterance.volume = 1.0;
+                    utterance.lang = 'en-US';
+                    
+                    utterance.onstart = function() {
+                        console.log('Auction pause announcement started');
+                    };
+                    
+                    utterance.onerror = function(event) {
+                        console.error('Auction pause announcement error:', event);
+                    };
+                    
+                    window.speechSynthesis.speak(utterance);
+                }, 100);
+            }
+        }
+        
+        function speakAuctionResume() {
+            console.log('Announcing auction resume');
+            
+            if ('speechSynthesis' in window) {
+                window.speechSynthesis.cancel();
+                
+                setTimeout(() => {
+                    const utterance = new SpeechSynthesisUtterance('Auction has been resumed');
+                    utterance.rate = 0.9;
+                    utterance.pitch = 1.2;
+                    utterance.volume = 1.0;
+                    utterance.lang = 'en-US';
+                    
+                    utterance.onstart = function() {
+                        console.log('Auction resume announcement started');
+                    };
+                    
+                    utterance.onerror = function(event) {
+                        console.error('Auction resume announcement error:', event);
+                    };
+                    
+                    window.speechSynthesis.speak(utterance);
+                }, 100);
+            }
         }
         
         function speakNextPlayer() {
