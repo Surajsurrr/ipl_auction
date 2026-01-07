@@ -1,19 +1,24 @@
 <?php
 // Database configuration
 define('DB_HOST', 'localhost');
+define('DB_PORT', '3307');
 define('DB_USER', 'root');
 define('DB_PASS', '');
 define('DB_NAME', 'ipl_auction');
 
 // Create connection
+// Temporary test DB name. Set to empty string to use the original DB.
+define('DB_NAME_TEMP_TEST', 'ipl_auction_new');
+
 function getDBConnection() {
-    $conn = new mysqli(DB_HOST, DB_USER, DB_PASS, DB_NAME);
-    
+    $dbToUse = (defined('DB_NAME_TEMP_TEST') && DB_NAME_TEMP_TEST) ? DB_NAME_TEMP_TEST : DB_NAME;
+    $conn = new mysqli(DB_HOST, DB_USER, DB_PASS, $dbToUse, DB_PORT);
+
     // Check connection
     if ($conn->connect_error) {
         die("Connection failed: " . $conn->connect_error);
     }
-    
+
     return $conn;
 }
 

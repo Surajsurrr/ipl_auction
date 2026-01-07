@@ -39,16 +39,25 @@ $sql .= " ORDER BY auction_group, player_name";
 
 $result = $conn->query($sql);
 $players = [];
-while ($row = $result->fetch_assoc()) {
-    $players[] = $row;
+if ($result) {
+    while ($row = $result->fetch_assoc()) {
+        $players[] = $row;
+    }
+} else {
+    die("Query failed: " . $conn->error);
 }
 
 // Get statistics
+$total_result = $conn->query("SELECT COUNT(*) as count FROM players");
+$group_a_result = $conn->query("SELECT COUNT(*) as count FROM players WHERE auction_group = 'A'");
+$group_b_result = $conn->query("SELECT COUNT(*) as count FROM players WHERE auction_group = 'B'");
+$group_c_result = $conn->query("SELECT COUNT(*) as count FROM players WHERE auction_group = 'C'");
+
 $stats = [
-    'total' => $conn->query("SELECT COUNT(*) as count FROM players")->fetch_assoc()['count'],
-    'group_a' => $conn->query("SELECT COUNT(*) as count FROM players WHERE auction_group = 'A'")->fetch_assoc()['count'],
-    'group_b' => $conn->query("SELECT COUNT(*) as count FROM players WHERE auction_group = 'B'")->fetch_assoc()['count'],
-    'group_c' => $conn->query("SELECT COUNT(*) as count FROM players WHERE auction_group = 'C'")->fetch_assoc()['count'],
+    'total' => $total_result ? $total_result->fetch_assoc()['count'] : 0,
+    'group_a' => $group_a_result ? $group_a_result->fetch_assoc()['count'] : 0,
+    'group_b' => $group_b_result ? $group_b_result->fetch_assoc()['count'] : 0,
+    'group_c' => $group_c_result ? $group_c_result->fetch_assoc()['count'] : 0,
 ];
 
 closeDBConnection($conn);
