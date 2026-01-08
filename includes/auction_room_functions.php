@@ -228,11 +228,16 @@ function startAuctionRoom($room_id, $user_id) {
     
     // Update room status and ensure we start from Marquee group
     $update_sql = "UPDATE auction_rooms SET status = 'in_progress', started_at = NOW(), current_auction_group = 'Marquee' WHERE room_id = $room_id";
-    
-    if ($conn->query($update_sql)) {
+
+    // Log the UPDATE for debugging (will appear in PHP error log)
+    error_log("[startAuctionRoom] SQL: " . $update_sql);
+    $res = $conn->query($update_sql);
+    if ($res) {
+        error_log("[startAuctionRoom] Rows affected: " . $conn->affected_rows);
         closeDBConnection($conn);
         return ['success' => true];
     } else {
+        error_log("[startAuctionRoom] Failed to update auction_rooms: " . $conn->error);
         closeDBConnection($conn);
         return ['success' => false, 'message' => 'Failed to start auction'];
     }

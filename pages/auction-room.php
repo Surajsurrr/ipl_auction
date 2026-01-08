@@ -81,39 +81,26 @@ if ($room['current_player_id']) {
 // Handle actions
 if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['action'])) {
     if ($_POST['action'] == 'start' && $is_host) {
-        startAuctionRoom($room_id, $current_user['user_id']);
+        // Capture start result for debugging
+        $startRes = startAuctionRoom($room_id, $current_user['user_id']);
+        // Log and store result in session for display
+        if (is_array($startRes)) {
+            error_log('[auction-room] startAuctionRoom result: ' . json_encode($startRes));
+            $_SESSION['start_result'] = $startRes;
+        } else {
+            error_log('[auction-room] startAuctionRoom returned non-array');
+            $_SESSION['start_result'] = ['success' => false, 'message' => 'Unexpected result from startAuctionRoom'];
+        }
         // Automatically select first player
         getNextPlayerForRoom($room_id, null);
-        
-        // Broadcast auction start event to all participants
-        $eventsDir = __DIR__ . '/../data/events';
-        if (!is_dir($eventsDir)) @mkdir($eventsDir, 0755, true);
-        $eventFile = $eventsDir . '/events_room_' . $room_id . '.json';
-        $events = file_exists($eventFile) ? json_decode(file_get_contents($eventFile), true) : [];
-        $events[] = ['type' => 'auction_start', 'timestamp' => time()];
-        file_put_contents($eventFile, json_encode($events));
-        
+        // Set flag to announce auction start
+        $_SESSION['announce_auction_start'] = true;
         header('Location: auction-room.php?room_id=' . $room_id);
         exit();
     } elseif ($_POST['action'] == 'next_player') {
         // Allow server-side next player selection (triggered by client POST)
         $group = $_POST['group'] ?? null;
-        $next_player = getNextPlayerForRoom($room_id, $group);
-        
-        // Broadcast next player event to all participants
-        if ($next_player) {
-            $eventsDir = __DIR__ . '/../data/events';
-            if (!is_dir($eventsDir)) @mkdir($eventsDir, 0755, true);
-            $eventFile = $eventsDir . '/events_room_' . $room_id . '.json';
-            $events = file_exists($eventFile) ? json_decode(file_get_contents($eventFile), true) : [];
-            $events[] = [
-                'type' => 'next_player',
-                'timestamp' => time(),
-                'player_name' => $next_player['player_name']
-            ];
-            file_put_contents($eventFile, json_encode($events));
-        }
-        
+        getNextPlayerForRoom($room_id, $group);
         header('Location: auction-room.php?room_id=' . $room_id);
         exit();
     } elseif ($_POST['action'] == 'bid') {
@@ -160,14 +147,8 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['action'])) {
         
         finalizePlayerInRoom($room_id);
         
-        // Broadcast sale event to all participants
-        $eventsDir = __DIR__ . '/../data/events';
-        if (!is_dir($eventsDir)) @mkdir($eventsDir, 0755, true);
-        $eventFile = $eventsDir . '/events_room_' . $room_id . '.json';
-        $events = file_exists($eventFile) ? json_decode(file_get_contents($eventFile), true) : [];
-        $events[] = [
-            'type' => 'player_sold',
-            'timestamp' => time(),
+        // Store sale notification in session
+        $_SESSION['sale_notification'] = [
             'player_name' => $sale_player['player_name'],
             'player_type' => $sale_player['player_type'],
             'base_price' => $sale_player['base_price'],
@@ -176,7 +157,9 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['action'])) {
             'team_logo' => $sale_bidder ? getTeamLogoPath($sale_bidder['team_name']) : null,
             'is_sold' => $room['current_bidder_id'] ? true : false
         ];
-        file_put_contents($eventFile, json_encode($events));
+        
+        // Set flag to announce next player
+        $_SESSION['announce_next_player'] = true;
         
         header('Location: auction-room.php?room_id=' . $room_id);
         exit();
@@ -184,30 +167,16 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['action'])) {
         // Pause the auction - save current state
         error_log("PAUSE ACTION TRIGGERED by user: " . $current_user['user_id']);
         pauseAuctionRoom($room_id);
-        
-        // Broadcast pause event to all participants
-        $eventsDir = __DIR__ . '/../data/events';
-        if (!is_dir($eventsDir)) @mkdir($eventsDir, 0755, true);
-        $eventFile = $eventsDir . '/events_room_' . $room_id . '.json';
-        $events = file_exists($eventFile) ? json_decode(file_get_contents($eventFile), true) : [];
-        $events[] = ['type' => 'auction_pause', 'timestamp' => time()];
-        file_put_contents($eventFile, json_encode($events));
-        
+        // Set flag to announce pause
+        $_SESSION['announce_auction_pause'] = true;
         error_log("Pause completed, redirecting...");
         header('Location: auction-room.php?room_id=' . $room_id);
         exit();
     } elseif ($_POST['action'] == 'resume' && $is_host) {
         // Resume the auction from paused state
         resumeAuctionRoom($room_id);
-        
-        // Broadcast resume event to all participants
-        $eventsDir = __DIR__ . '/../data/events';
-        if (!is_dir($eventsDir)) @mkdir($eventsDir, 0755, true);
-        $eventFile = $eventsDir . '/events_room_' . $room_id . '.json';
-        $events = file_exists($eventFile) ? json_decode(file_get_contents($eventFile), true) : [];
-        $events[] = ['type' => 'auction_resume', 'timestamp' => time()];
-        file_put_contents($eventFile, json_encode($events));
-        
+        // Set flag to announce resume
+        $_SESSION['announce_auction_resume'] = true;
         header('Location: auction-room.php?room_id=' . $room_id);
         exit();
     } elseif ($_POST['action'] == 'end_auction' && $is_host) {
@@ -308,6 +277,13 @@ if ($announce_next) {
 $announce_auction_start = isset($_SESSION['announce_auction_start']);
 if ($announce_auction_start) {
     unset($_SESSION['announce_auction_start']);
+}
+
+// Surface start result for debugging (temporary)
+$start_result = null;
+if (isset($_SESSION['start_result'])) {
+    $start_result = $_SESSION['start_result'];
+    unset($_SESSION['start_result']);
 }
 
 // Check for auction pause announcement
@@ -1570,70 +1546,64 @@ if ($current_player) {
         }
         
         // ============================================================================
-        // REAL-TIME EVENT POLLING FOR VOICE ANNOUNCEMENTS (All Participants)
+        // SALE NOTIFICATIONS & ANNOUNCEMENTS
         // ============================================================================
-        let lastEventCheck = Math.floor(Date.now() / 1000);
+        const saleNotification = <?php echo $sale_notification ? json_encode($sale_notification) : 'null'; ?>;
+        const shouldAnnounceNext = <?php echo $announce_next ? 'true' : 'false'; ?>;
+        const shouldAnnounceAuctionStart = <?php echo $announce_auction_start ? 'true' : 'false'; ?>;
+        const shouldAnnounceAuctionPause = <?php echo $announce_auction_pause ? 'true' : 'false'; ?>;
+        const shouldAnnounceAuctionResume = <?php echo $announce_auction_resume ? 'true' : 'false'; ?>;
+        const currentPlayerName = <?php echo $current_player ? json_encode($current_player['player_name']) : 'null'; ?>;
         
-        async function pollRoomEvents() {
-            try {
-                const response = await fetch(`get_room_events.php?room_id=<?php echo $room_id; ?>&last_check=${lastEventCheck}`);
-                const data = await response.json();
-                
-                if (data.success && data.events && data.events.length > 0) {
-                    console.log('New events received:', data.events);
-                    
-                    // Process each event
-                    for (const event of data.events) {
-                        handleRoomEvent(event);
-                        // Update last check to latest event timestamp
-                        if (event.timestamp > lastEventCheck) {
-                            lastEventCheck = event.timestamp;
-                        }
-                    }
-                }
-            } catch (e) {
-                console.error('Error polling events:', e);
-            }
+        console.log('Sale notification data:', saleNotification);
+        console.log('Should announce next:', shouldAnnounceNext);
+        console.log('Should announce auction start:', shouldAnnounceAuctionStart);
+        console.log('Should announce auction pause:', shouldAnnounceAuctionPause);
+        console.log('Should announce auction resume:', shouldAnnounceAuctionResume);
+        
+        // Show sale notification if exists
+        if (saleNotification) {
+            console.log('Showing sale notification...');
+            showSaleNotification(saleNotification);
         }
         
-        function handleRoomEvent(event) {
-            console.log('Handling event:', event.type);
-            
-            switch(event.type) {
-                case 'auction_start':
-                    speakAuctionStart();
-                    break;
-                    
-                case 'auction_pause':
-                    speakAuctionPause();
-                    break;
-                    
-                case 'auction_resume':
-                    speakAuctionResume();
-                    break;
-                    
-                case 'player_sold':
-                    showSaleNotification(event);
-                    // Announce next player after 5 seconds
-                    setTimeout(() => {
-                        if (event.next_player_name) {
-                            speakNextPlayerWithName(event.next_player_name);
-                        }
-                    }, 5000);
-                    break;
-                    
-                case 'next_player':
-                    if (event.player_name) {
-                        speakNextPlayerWithName(event.player_name);
-                    }
-                    break;
-            }
+        // Announce auction start
+        if (shouldAnnounceAuctionStart) {
+            console.log('Announcing auction start...');
+            setTimeout(() => {
+                speakAuctionStart();
+            }, 500);
         }
         
-        // Poll for events every 2 seconds
-        setInterval(pollRoomEvents, 2000);
-        // Initial poll after 1 second
-        setTimeout(pollRoomEvents, 1000);
+        // Announce auction pause
+        if (shouldAnnounceAuctionPause) {
+            console.log('Announcing auction pause...');
+            setTimeout(() => {
+                speakAuctionPause();
+            }, 500);
+        }
+        
+        // Announce auction resume
+        if (shouldAnnounceAuctionResume) {
+            console.log('Announcing auction resume...');
+            setTimeout(() => {
+                speakAuctionResume();
+            }, 500);
+        }
+        
+        // Announce next player after sale notification
+        if (shouldAnnounceNext && saleNotification) {
+            console.log('Will announce next player after 5 seconds...');
+            setTimeout(() => {
+                speakNextPlayer();
+            }, 5000); // After sale notification auto-dismisses
+        } else if (shouldAnnounceNext && !saleNotification) {
+            console.log('Will announce next player immediately...');
+            // If no sale notification, announce immediately
+            setTimeout(() => {
+                speakNextPlayer();
+            }, 500);
+        }
         
         function speakAuctionStart() {
             console.log('Announcing auction start');
@@ -1734,28 +1704,6 @@ if ($current_player) {
                     utterance.onerror = function(event) {
                         console.error('Next player announcement error:', event);
                     };
-                    
-                    window.speechSynthesis.speak(utterance);
-                }, 100);
-            }
-        }
-        
-        function speakNextPlayerWithName(playerName) {
-            console.log('Announcing next player:', playerName);
-            
-            if ('speechSynthesis' in window && playerName) {
-                window.speechSynthesis.cancel();
-                
-                setTimeout(() => {
-                    const utterance = new SpeechSynthesisUtterance('Next Player, ' + playerName);
-                    utterance.rate = 0.9;
-                    utterance.pitch = 1.2;
-                    utterance.volume = 1.0;
-                    utterance.lang = 'en-US';
-                    
-                    utterance.onstart = () => console.log('Next player speech started');
-                    utterance.onend = () => console.log('Next player speech ended');
-                    utterance.onerror = (e) => console.error('Speech synthesis error:', e);
                     
                     window.speechSynthesis.speak(utterance);
                 }, 100);
