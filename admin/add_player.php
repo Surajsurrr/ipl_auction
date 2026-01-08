@@ -28,6 +28,7 @@
             'player_type' => $_POST['player_type'],
             'player_role' => $_POST['player_role'],
             'base_price' => $_POST['base_price'], // Already in rupees
+            'auction_group' => $_POST['auction_group'] ?? '',
             'nationality' => $_POST['nationality'],
             'age' => $_POST['age'],
             'previous_team' => $_POST['previous_team']
