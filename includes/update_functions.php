@@ -15,7 +15,43 @@ function getAllUpdates($limit = null) {
 // Get featured updates
 function getFeaturedUpdates() {
     $sql = "SELECT * FROM ipl_updates WHERE is_featured = TRUE ORDER BY created_at DESC LIMIT 5";
-    return getAllRows($sql);
+    $updates = getAllRows($sql);
+
+    // If DB doesn't have featured updates yet, return sensible defaults
+    if (empty($updates)) {
+        $now = date('Y-m-d H:i:s');
+        return [
+            [
+                'update_id' => 0,
+                'title' => 'Multiplayer Auction Rules',
+                'content' => "Basic rules: Each team gets ₹120 crores budget; squad size 18-25; max 8 overseas players. Bidding starts at base price with intelligent increments and a 15s countdown.",
+                'category' => 'Rules',
+                'is_featured' => 1,
+                'image_url' => '',
+                'created_at' => $now
+            ],
+            [
+                'update_id' => 0,
+                'title' => 'Welcome to IPL Auction 2026',
+                'content' => "Welcome! Create private rooms, invite friends with a 6-digit code, and enjoy live auctions with leaderboard and smart timers.",
+                'category' => 'General',
+                'is_featured' => 1,
+                'image_url' => '',
+                'created_at' => $now
+            ],
+            [
+                'update_id' => 0,
+                'title' => 'Player Pool & Groups',
+                'content' => "Players are organized into groups: Marquee, A, B, C. Use the Add Player admin to assign Marquee players manually.",
+                'category' => 'Players',
+                'is_featured' => 1,
+                'image_url' => '',
+                'created_at' => $now
+            ]
+        ];
+    }
+
+    return $updates;
 }
 
 // Get update by ID
