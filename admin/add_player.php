@@ -126,10 +126,10 @@
                         <label for="auction_group">Auction Group *</label>
                         <select id="auction_group" name="auction_group" class="form-control" required>
                             <option value="">Select Group</option>
-                            <option value="A">Group A (Premium)</option>
-                            <option value="B">Group B (Star)</option>
-                            <option value="C">Group C (Mid-tier)</option>
-                            <option value="D">Group D (Budget)</option>
+                            <option value="Marquee">Marquee</option>
+                            <option value="A">Group A</option>
+                            <option value="B">Group B</option>
+                            <option value="C">Group C</option>
                         </select>
                     </div>
 
@@ -153,13 +153,13 @@
         </div>
 
         <!-- Helper Guide -->
-        <div class="card" style="max-width: 600px; margin: 2rem auto; background: #f8f9fa;">
+                <div class="card" style="max-width: 600px; margin: 2rem auto; background: #f8f9fa;">
             <h3>Group Guidelines</h3>
             <ul style="line-height: 2;">
+                <li><strong>Marquee:</strong> Top marquee players (manually assigned)</li>
                 <li><strong>Group A:</strong> Premium players (15-20 Cr base price)</li>
                 <li><strong>Group B:</strong> Star players (8-12 Cr base price)</li>
                 <li><strong>Group C:</strong> Mid-tier players (5-8 Cr base price)</li>
-                <li><strong>Group D:</strong> Budget/Uncapped (2-3 Cr base price)</li>
             </ul>
         </div>
     </div>
