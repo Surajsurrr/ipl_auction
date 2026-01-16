@@ -935,28 +935,9 @@ if ($current_player) {
         </div>
     <?php endif; ?>
 
-    <?php if ($is_host): ?>
-        <div style="max-width:1200px;margin:0.5rem auto;padding:0 1rem;">
-            <div style="background:#eef6ff;border:1px solid #cfe6ff;color:#08306b; padding:10px;border-radius:8px;font-size:0.95rem;">
-                <strong>Debug (room row):</strong> <?php echo htmlspecialchars(json_encode($room)); ?>
-            </div>
-        </div>
-    <?php endif; ?>
-
     <?php if ($is_host):
-        // Live counts to help debug selection issues
-        $conn_dbg = getDBConnection();
-        $tot_r = $conn_dbg->query("SELECT COUNT(*) as total FROM players");
-        $total_players = $tot_r ? intval($tot_r->fetch_assoc()['total']) : 0;
-        $used_r = $conn_dbg->query("SELECT COUNT(*) as used FROM room_used_players WHERE room_id = " . intval($room_id));
-        $used_players = $used_r ? intval($used_r->fetch_assoc()['used']) : 0;
-        closeDBConnection($conn_dbg);
+        // Host-only section removed: selection counts hidden from UI
     ?>
-        <div style="max-width:1200px;margin:0.5rem auto;padding:0 1rem;">
-            <div style="background:#fff7ed;border:1px solid #ffe1b8;color:#7a4b00; padding:10px;border-radius:8px;font-size:0.95rem;">
-                <strong>Selection counts:</strong> Total players = <?php echo $total_players; ?>, Used for room <?php echo intval($room_id); ?> = <?php echo $used_players; ?>
-            </div>
-        </div>
     <?php endif; ?>
 
     <div class="auction-room">
