@@ -994,6 +994,16 @@ if ($current_player) {
             <!-- Participants Panel -->
             <div class="participants-panel">
                 <h3>Participants (<?php echo count($participants); ?>/<?php echo $room['max_participants']; ?>)</h3>
+                <!-- Group quick-selector (visible to all participants) -->
+                <div style="margin:0.75rem 0 1rem 0;">
+                    <div style="display:flex;gap:0.5rem;flex-wrap:wrap;">
+                        <button type="button" class="btn-group" data-group="Marquee" onclick="showGroupPlayers('Marquee')">Marquee</button>
+                        <button type="button" class="btn-group" data-group="A" onclick="showGroupPlayers('A')">Group A</button>
+                        <button type="button" class="btn-group" data-group="B" onclick="showGroupPlayers('B')">Group B</button>
+                        <button type="button" class="btn-group" data-group="C" onclick="showGroupPlayers('C')">Group C</button>
+                        <button type="button" class="btn-group" data-group="Accelerated" onclick="showGroupPlayers('Accelerated')">Accelerated</button>
+                    </div>
+                </div>
                 <?php foreach ($participants as $p): ?>
                     <div class="participant-item <?php echo $p['is_host'] ? 'host' : ''; ?>" onclick="showParticipantDetails(<?php echo $p['participant_id']; ?>)" title="Click to view squad details">
                                 <div class="participant-name">
