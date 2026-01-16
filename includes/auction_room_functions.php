@@ -761,10 +761,11 @@ function pauseAuctionRoom($room_id) {
         error_log("Remaining seconds: $remaining");
     }
     
-    // Save the remaining time and set status to paused
+    // Save the remaining time, clear the expiry so background timers stop, and set status to paused
     $update_sql = "UPDATE auction_rooms 
                    SET status = 'paused',
-                       paused_time_remaining = $remaining
+                       paused_time_remaining = $remaining,
+                       bid_timer_expires_at = NULL
                    WHERE room_id = $room_id";
     
     $success = $conn->query($update_sql);

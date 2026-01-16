@@ -80,6 +80,16 @@ if ($room['current_player_id']) {
 
 // Handle actions
 if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['action'])) {
+    // Re-fetch latest room status to ensure actions respect a pause state
+    $latest_room = getRoomById($room_id);
+    if ($latest_room && isset($latest_room['status']) && $latest_room['status'] === 'paused') {
+        // Allow only resume/pause actions while paused
+        if (!in_array($_POST['action'], ['resume', 'pause'])) {
+            $_SESSION['action_error'] = 'Auction is paused. Action blocked.';
+            header('Location: auction-room.php?room_id=' . $room_id);
+            exit();
+        }
+    }
     if ($_POST['action'] == 'start' && $is_host) {
         // Capture start result for debugging
         $startRes = startAuctionRoom($room_id, $current_user['user_id']);
@@ -950,8 +960,8 @@ if ($current_player) {
                 </p>
             </div>
             <?php 
-            // Show stop/restart buttons for host when there's a current player
-            if ($is_host && $current_player): 
+            // Show stop/restart buttons for host (always visible to host)
+            if ($is_host): 
             ?>
                 <form method="POST" style="margin: 0;">
                     <input type="hidden" name="action" value="<?php echo $room['status'] == 'paused' ? 'resume' : 'pause'; ?>">
