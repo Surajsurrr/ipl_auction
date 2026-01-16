@@ -1,0 +1,4 @@
+2026-01-16 22:03:05 - room_sql error: Unknown column 'r.bidding_war_player1_id' in 'field list' -- SQL: SELECT r.current_player_id, r.current_bid, r.current_bidder_id, r.bidding_war_player1_id, r.bidding_war_player2_id, p.base_price 
+                 FROM auction_rooms r 
+                 LEFT JOIN players p ON r.current_player_id = p.player_id 
+                 WHERE r.room_id = 1

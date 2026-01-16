@@ -994,14 +994,14 @@ if ($current_player) {
             <!-- Participants Panel -->
             <div class="participants-panel">
                 <h3>Participants (<?php echo count($participants); ?>/<?php echo $room['max_participants']; ?>)</h3>
-                <!-- Group quick-selector (visible to all participants) -->
+                <!-- Group quick-selector (visible to all participants, placed in participants panel) -->
                 <div style="margin:0.75rem 0 1rem 0;">
                     <div style="display:flex;gap:0.5rem;flex-wrap:wrap;">
                         <button type="button" class="btn-group" data-group="Marquee" onclick="showGroupPlayers('Marquee')">Marquee</button>
                         <button type="button" class="btn-group" data-group="A" onclick="showGroupPlayers('A')">Group A</button>
                         <button type="button" class="btn-group" data-group="B" onclick="showGroupPlayers('B')">Group B</button>
                         <button type="button" class="btn-group" data-group="C" onclick="showGroupPlayers('C')">Group C</button>
-                        <button type="button" class="btn-group" data-group="Accelerated" onclick="showGroupPlayers('Accelerated')">Accelerated</button>
+                        <button type="button" class="btn-group" data-group="Accelerated" onclick="showGroupPlayers('Accelerated')">Accelerated Round</button>
                     </div>
                 </div>
                 <?php foreach ($participants as $p): ?>
@@ -1105,16 +1105,7 @@ if ($current_player) {
                     <!-- Group Selection (host only) -->
                     <!-- single set of group buttons (visible to all). Host can request next player from the modal -->
 
-                    <!-- Group View Buttons (visible to all participants) -->
-                    <div style="margin-bottom: 1rem;">
-                        <div style="display: grid; grid-template-columns: repeat(5, 1fr); gap: 0.5rem;">
-                            <button type="button" class="btn-group" data-group="Marquee" onclick="showGroupPlayers('Marquee')">Marquee</button>
-                            <button type="button" class="btn-group" data-group="A" onclick="showGroupPlayers('A')">Group A</button>
-                            <button type="button" class="btn-group" data-group="B" onclick="showGroupPlayers('B')">Group B</button>
-                            <button type="button" class="btn-group" data-group="C" onclick="showGroupPlayers('C')">Group C</button>
-                            <button type="button" class="btn-group" data-group="Accelerated" onclick="showGroupPlayers('Accelerated')">Accelerated Round</button>
-                        </div>
-                    </div>
+                    <!-- Group buttons are shown in the participants panel to avoid duplication -->
                     <form id="hostRequestForm" method="POST" style="display:none;">
                         <input type="hidden" name="action" value="next_player">
                         <input type="hidden" name="group" id="hostRequestGroup">
@@ -1477,7 +1468,6 @@ if ($current_player) {
                             <div class="modal-content">
                                 <div class="modal-header">
                                     <h2>Players in ${group} (${players.length})</h2>
-                                    ${isHost ? `<button type="button" style="margin-right:1rem; background:#10b981; color:white; border:none; padding:0.5rem 0.75rem; border-radius:6px; cursor:pointer;" onclick="requestNextPlayer('${group.replace("'","\\'")}')">Request Next Player</button>` : ''}
                                     <span class="close" onclick="closeGroupModal()">&times;</span>
                                 </div>
                                 <div class="modal-body">

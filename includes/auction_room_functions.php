@@ -37,6 +37,25 @@ function generateRoomCode() {
     return $code;
 }
 
+// Ensure bidding war columns exist (adds them if missing) - safe to run at runtime
+function ensureBiddingWarColumns($conn) {
+    $check_sql = "SHOW COLUMNS FROM auction_rooms LIKE 'bidding_war_player1_id'";
+    $res = $conn->query($check_sql);
+    if (!$res || $res->num_rows == 0) {
+        $sql = "ALTER TABLE auction_rooms 
+                ADD COLUMN bidding_war_player1_id INT DEFAULT NULL,
+                ADD COLUMN bidding_war_player2_id INT DEFAULT NULL,
+                ADD COLUMN bidding_war_player1_bid BIGINT DEFAULT NULL,
+                ADD COLUMN bidding_war_player2_bid BIGINT DEFAULT NULL";
+        if (!$conn->query($sql)) {
+            error_log('[ensureBiddingWarColumns] failed to add columns: ' . $conn->error);
+            return false;
+        }
+        return true;
+    }
+    return true;
+}
+
 // Create auction room
 function createAuctionRoom($user_id, $room_name, $max_participants = 10, $budget_per_team = 12000000000) {
     $conn = getDBConnection();
@@ -433,9 +452,14 @@ function getNextPlayerForRoom($room_id, $group = null) {
 // Place bid in room
 function placeBidInRoom($room_id, $participant_id, $bid_amount) {
     $conn = getDBConnection();
+    // Ensure bidding war tracking columns exist (migration helper)
+    ensureBiddingWarColumns($conn);
     $room_id = $conn->real_escape_string($room_id);
     $participant_id = $conn->real_escape_string($participant_id);
     $bid_amount = $conn->real_escape_string($bid_amount);
+
+    // Normalize bid amount to integer (stored in DB as integer rupee value)
+    $bid_amount_val = (int) round(floatval($bid_amount));
 
     // Verify participant exists
     $check_sql = "SELECT * FROM room_participants WHERE participant_id = $participant_id";
@@ -445,7 +469,7 @@ function placeBidInRoom($room_id, $participant_id, $bid_amount) {
         return ['success' => false, 'message' => 'Participant not found'];
     }
     $participant = $result->fetch_assoc();
-    if ($participant['remaining_budget'] < $bid_amount) {
+    if ($participant['remaining_budget'] < $bid_amount_val) {
         closeDBConnection($conn);
         return ['success' => false, 'message' => 'Insufficient budget'];
     }
@@ -456,7 +480,19 @@ function placeBidInRoom($room_id, $participant_id, $bid_amount) {
                  LEFT JOIN players p ON r.current_player_id = p.player_id 
                  WHERE r.room_id = $room_id";
     $room_result = $conn->query($room_sql);
+    if (!$room_result) {
+        $err = $conn->error;
+        error_log('[placeBidInRoom] room_sql failed: ' . $err . ' SQL: ' . $room_sql);
+        // append to debug file for easier visibility during local development
+        @file_put_contents(__DIR__ . '/../data/debug/placebid_error.log', date('Y-m-d H:i:s') . " - room_sql error: $err -- SQL: $room_sql\n", FILE_APPEND);
+        closeDBConnection($conn);
+        return ['success' => false, 'message' => 'Database error while fetching room state: ' . $err];
+    }
     $room = $room_result->fetch_assoc();
+    if (!$room) {
+        closeDBConnection($conn);
+        return ['success' => false, 'message' => 'Room not found or no current player'];
+    }
     
     // Prevent same participant from bidding twice in a row - ensure alternate turns
     if ($room['current_bidder_id'] && $room['current_bidder_id'] == $participant_id) {
@@ -465,9 +501,9 @@ function placeBidInRoom($room_id, $participant_id, $bid_amount) {
     }
 
     // Check if this is the first bid (no current bidder and bid equals base price)
-    $is_first_bid = (!$room['current_bidder_id'] && $bid_amount == $room['base_price'] && $room['current_bid'] == $room['base_price']);
-    
-    if (!$is_first_bid && $bid_amount <= $room['current_bid']) {
+    $is_first_bid = (!$room['current_bidder_id'] && $bid_amount_val == $room['base_price'] && $room['current_bid'] == $room['base_price']);
+
+    if (!$is_first_bid && $bid_amount_val <= $room['current_bid']) {
         closeDBConnection($conn);
         return ['success' => false, 'message' => 'Bid must be higher than current bid'];
     }
@@ -488,33 +524,42 @@ function placeBidInRoom($room_id, $participant_id, $bid_amount) {
     if (!$player1) {
         // First bidder
         $player1 = $participant_id;
-        $player1_bid = $bid_amount;
+        $player1_bid = $bid_amount_val;
         $update_war = "UPDATE auction_rooms SET bidding_war_player1_id = $player1, bidding_war_player1_bid = $player1_bid WHERE room_id = $room_id";
         $conn->query($update_war);
     } elseif (!$player2 && $participant_id != $player1) {
         // Second bidder (different from first) - lock established
         $player2 = $participant_id;
-        $player2_bid = $bid_amount;
+        $player2_bid = $bid_amount_val;
         $update_war = "UPDATE auction_rooms SET bidding_war_player2_id = $player2, bidding_war_player2_bid = $player2_bid WHERE room_id = $room_id";
         $conn->query($update_war);
     } elseif ($participant_id == $player1) {
         // Player 1 bidding again
-        $update_war = "UPDATE auction_rooms SET bidding_war_player1_bid = $bid_amount WHERE room_id = $room_id";
+        $update_war = "UPDATE auction_rooms SET bidding_war_player1_bid = $bid_amount_val WHERE room_id = $room_id";
         $conn->query($update_war);
     } elseif ($participant_id == $player2) {
         // Player 2 bidding again
-        $update_war = "UPDATE auction_rooms SET bidding_war_player2_bid = $bid_amount WHERE room_id = $room_id";
+        $update_war = "UPDATE auction_rooms SET bidding_war_player2_bid = $bid_amount_val WHERE room_id = $room_id";
         $conn->query($update_war);
     }
     
     // Update room current bid
-    $update_sql = "UPDATE auction_rooms SET current_bid = $bid_amount, current_bidder_id = $participant_id WHERE room_id = $room_id";
-    $conn->query($update_sql);
+    $update_sql = "UPDATE auction_rooms SET current_bid = $bid_amount_val, current_bidder_id = $participant_id WHERE room_id = $room_id";
+    if (!$conn->query($update_sql)) {
+        error_log('[placeBidInRoom] update current_bid failed: ' . $conn->error . ' SQL: ' . $update_sql);
+        closeDBConnection($conn);
+        return ['success' => false, 'message' => 'Database error updating current bid'];
+    }
     
     // Record bid
     $bid_sql = "INSERT INTO room_bids (room_id, player_id, participant_id, bid_amount) 
-                VALUES ($room_id, {$room['current_player_id']}, $participant_id, $bid_amount)";
-    $conn->query($bid_sql);
+                VALUES ($room_id, {$room['current_player_id']}, $participant_id, $bid_amount_val)";
+    if (!$conn->query($bid_sql)) {
+        error_log('[placeBidInRoom] insert bid failed: ' . $conn->error . ' SQL: ' . $bid_sql);
+        // Attempt to roll back the current_bid update to previous value could be added here
+        closeDBConnection($conn);
+        return ['success' => false, 'message' => 'Database error recording bid'];
+    }
     
     closeDBConnection($conn);
     return ['success' => true];
