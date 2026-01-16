@@ -2,6 +2,15 @@
 require_once __DIR__ . '/../config/database.php';
 require_once __DIR__ . '/../config/session.php';
 
+// Simple file debug writer for getNextPlayerForRoom troubleshooting
+function _grf_debug($msg) {
+    $logDir = __DIR__ . '/../data/debug';
+    if (!is_dir($logDir)) @mkdir($logDir, 0755, true);
+    $fn = $logDir . '/getnext.log';
+    $line = date('[Y-m-d H:i:s] ') . $msg . "\n";
+    @file_put_contents($fn, $line, FILE_APPEND | LOCK_EX);
+}
+
 // Allowed teams for participants
 function getAllowedTeams() {
     return [
@@ -227,6 +236,19 @@ function startAuctionRoom($room_id, $user_id) {
     }
     
     // Update room status and ensure we start from Marquee group
+    // Ensure 'current_auction_group' column exists (migration may not have been run)
+    $colCheck = $conn->query("SHOW COLUMNS FROM auction_rooms LIKE 'current_auction_group'");
+    if (!$colCheck || $colCheck->num_rows == 0) {
+        error_log("[startAuctionRoom] current_auction_group column missing, attempting to add it");
+        $alterSql = "ALTER TABLE auction_rooms ADD COLUMN current_auction_group VARCHAR(20) DEFAULT 'Marquee' AFTER status";
+        if ($conn->query($alterSql)) {
+            error_log("[startAuctionRoom] Added current_auction_group column successfully");
+        } else {
+            error_log("[startAuctionRoom] Failed to add current_auction_group column: " . $conn->error);
+            // Continue - UPDATE will likely fail and be logged below
+        }
+    }
+
     $update_sql = "UPDATE auction_rooms SET status = 'in_progress', started_at = NOW(), current_auction_group = 'Marquee' WHERE room_id = $room_id";
 
     // Log the UPDATE for debugging (will appear in PHP error log)
@@ -247,12 +269,15 @@ function startAuctionRoom($room_id, $user_id) {
 function getNextPlayerForRoom($room_id, $group = null) {
     $conn = getDBConnection();
     $room_id = $conn->real_escape_string($room_id);
-    
+    error_log("[getNextPlayerForRoom] Called for room_id=$room_id with group=" . ($group ?? 'NULL'));
     // Get current auction group
     $room_sql = "SELECT current_auction_group FROM auction_rooms WHERE room_id = $room_id";
+    error_log("[getNextPlayerForRoom] room_sql: " . $room_sql);
     $room_result = $conn->query($room_sql);
     $room_data = $room_result ? $room_result->fetch_assoc() : null;
     $current_group = $room_data['current_auction_group'] ?? 'Marquee';
+    error_log("[getNextPlayerForRoom] current_auction_group from DB: " . ($current_group ?? 'NULL'));
+    _grf_debug("room_id=$room_id initial_group=" . ($group ?? 'NULL') . " db_current_group=" . ($current_group ?? 'NULL'));
     
     // Define group order
     $group_order = ['Marquee', 'A', 'B', 'C'];
@@ -271,8 +296,10 @@ function getNextPlayerForRoom($room_id, $group = null) {
                                                     SELECT player_id FROM room_player_assignments WHERE room_id = $room_id
                                             )
                                         ORDER BY RAND() LIMIT 1";
+            error_log("[getNextPlayerForRoom] accelerated SQL: " . $sql);
             $result = $conn->query($sql);
             $player = $result ? $result->fetch_assoc() : null;
+            error_log("[getNextPlayerForRoom] accelerated player found: " . ($player ? $player['player_id'] : 'NONE'));
 
             if ($player) {
                 $update_sql = "UPDATE auction_rooms 
@@ -292,12 +319,18 @@ function getNextPlayerForRoom($room_id, $group = null) {
                     )
                     AND p.auction_group = '$group'
                     ORDER BY RAND() LIMIT 1";
+            error_log("[getNextPlayerForRoom] explicit group SQL: " . $sql);
+            _grf_debug("explicit_sql=" . $sql);
             $result = $conn->query($sql);
+            if (!$result) _grf_debug("explicit_sql_error=" . $conn->error);
             $player = $result ? $result->fetch_assoc() : null;
+
+            error_log("[getNextPlayerForRoom] explicit group player found: " . ($player ? $player['player_id'] : 'NONE'));
+            _grf_debug("explicit_player_found=" . ($player ? $player['player_id'] : 'NONE'));
 
             if ($player) {
                 $insert_sql = "INSERT INTO room_used_players (room_id, player_id) VALUES ($room_id, {$player['player_id']})";
-                $conn->query($insert_sql);
+                if (!$conn->query($insert_sql)) _grf_debug("insert_used_error=" . $conn->error . " sql=" . $insert_sql);
 
                 $update_sql = "UPDATE auction_rooms 
                                SET current_player_id = {$player['player_id']}, 
@@ -307,12 +340,30 @@ function getNextPlayerForRoom($room_id, $group = null) {
                                    current_auction_group = '$group'
                                WHERE room_id = $room_id";
                 $conn->query($update_sql);
+                if ($conn->error) _grf_debug("update_room_error=" . $conn->error . " sql=" . $update_sql);
             }
         }
     }
 
     // If no explicit group request or no player found yet, fall back to automatic flow
     if (!$player) {
+        // Safety fallback: if all players are already marked used for this room,
+        // clear the room_used_players entries so selection can restart.
+        $totRes = $conn->query("SELECT COUNT(*) as total FROM players");
+        $totalPlayers = $totRes ? intval($totRes->fetch_assoc()['total']) : 0;
+        $usedRes = $conn->query("SELECT COUNT(*) as used FROM room_used_players WHERE room_id = $room_id");
+        $usedCount = $usedRes ? intval($usedRes->fetch_assoc()['used']) : 0;
+        _grf_debug("totalPlayers=$totalPlayers usedCount=$usedCount");
+        if ($totalPlayers > 0 && $usedCount >= $totalPlayers) {
+            _grf_debug("All players used for room $room_id - clearing room_used_players to restart selection cycle.");
+            if (!$conn->query("DELETE FROM room_used_players WHERE room_id = $room_id")) {
+                _grf_debug("delete_used_error=" . $conn->error);
+            } else {
+                _grf_debug("deleted_used_records");
+            }
+            // reset player var so fallback queries can pick again
+            $player = null;
+        }
         // Try groups in fixed order: Marquee -> A -> B -> C
         foreach ($group_order as $grp) {
             $sql = "SELECT p.* FROM players p
@@ -321,9 +372,11 @@ function getNextPlayerForRoom($room_id, $group = null) {
                     )
                     AND p.auction_group = '$grp'
                     ORDER BY RAND() LIMIT 1";
-
+            _grf_debug("fallback_sql_group=$grp sql=" . $sql);
             $result = $conn->query($sql);
+            if (!$result) _grf_debug("fallback_sql_error_group=$grp err=" . $conn->error);
             $player = $result ? $result->fetch_assoc() : null;
+            _grf_debug("fallback_player_for_group=$grp found=" . ($player ? $player['player_id'] : 'NONE'));
 
             if ($player) {
                 // Mark as used
@@ -371,7 +424,8 @@ function getNextPlayerForRoom($room_id, $group = null) {
             }
         }
     }
-    
+
+    error_log("[getNextPlayerForRoom] returning player: " . ($player ? $player['player_id'] : 'NONE'));
     closeDBConnection($conn);
     return $player;
 }
@@ -382,16 +436,14 @@ function placeBidInRoom($room_id, $participant_id, $bid_amount) {
     $room_id = $conn->real_escape_string($room_id);
     $participant_id = $conn->real_escape_string($participant_id);
     $bid_amount = $conn->real_escape_string($bid_amount);
-    
-    // Get participant budget
-    $sql = "SELECT remaining_budget FROM room_participants WHERE participant_id = $participant_id";
-    $result = $conn->query($sql);
-    
+
+    // Verify participant exists
+    $check_sql = "SELECT * FROM room_participants WHERE participant_id = $participant_id";
+    $result = $conn->query($check_sql);
     if (!$result || $result->num_rows == 0) {
         closeDBConnection($conn);
         return ['success' => false, 'message' => 'Participant not found'];
     }
-    
     $participant = $result->fetch_assoc();
     if ($participant['remaining_budget'] < $bid_amount) {
         closeDBConnection($conn);
@@ -421,8 +473,8 @@ function placeBidInRoom($room_id, $participant_id, $bid_amount) {
     }
     
     // Check bidding war lock
-    $player1 = $room['bidding_war_player1_id'];
-    $player2 = $room['bidding_war_player2_id'];
+    $player1 = $room['bidding_war_player1_id'] ?? null;
+    $player2 = $room['bidding_war_player2_id'] ?? null;
     
     // If both players are locked, only they can bid
     if ($player1 && $player2) {
@@ -625,14 +677,17 @@ function releaseFromBiddingWar($room_id, $participant_id) {
     $result = $conn->query($sql);
     $room = $result->fetch_assoc();
     
-    if ($participant_id == $room['bidding_war_player1_id']) {
+    $room_player1 = $room['bidding_war_player1_id'] ?? null;
+    $room_player2 = $room['bidding_war_player2_id'] ?? null;
+
+    if ($participant_id == $room_player1) {
         // Remove player 1
         $update_sql = "UPDATE auction_rooms 
                        SET bidding_war_player1_id = NULL, 
                            bidding_war_player1_bid = NULL 
                        WHERE room_id = $room_id";
         $conn->query($update_sql);
-    } elseif ($participant_id == $room['bidding_war_player2_id']) {
+    } elseif ($participant_id == $room_player2) {
         // Remove player 2
         $update_sql = "UPDATE auction_rooms 
                        SET bidding_war_player2_id = NULL, 

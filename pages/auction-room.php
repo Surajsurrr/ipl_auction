@@ -929,6 +929,36 @@ if ($current_player) {
         </div>
     </nav>
 
+    <?php if (!empty($start_result)): ?>
+        <div style="max-width:1200px;margin:1rem auto;padding:0 1rem;">
+            <div style="background:#ffeeee;border:1px solid #ffcccc;color:#800; padding:12px;border-radius:8px;">Debug: Start Auction result: <?php echo htmlspecialchars(json_encode($start_result)); ?></div>
+        </div>
+    <?php endif; ?>
+
+    <?php if ($is_host): ?>
+        <div style="max-width:1200px;margin:0.5rem auto;padding:0 1rem;">
+            <div style="background:#eef6ff;border:1px solid #cfe6ff;color:#08306b; padding:10px;border-radius:8px;font-size:0.95rem;">
+                <strong>Debug (room row):</strong> <?php echo htmlspecialchars(json_encode($room)); ?>
+            </div>
+        </div>
+    <?php endif; ?>
+
+    <?php if ($is_host):
+        // Live counts to help debug selection issues
+        $conn_dbg = getDBConnection();
+        $tot_r = $conn_dbg->query("SELECT COUNT(*) as total FROM players");
+        $total_players = $tot_r ? intval($tot_r->fetch_assoc()['total']) : 0;
+        $used_r = $conn_dbg->query("SELECT COUNT(*) as used FROM room_used_players WHERE room_id = " . intval($room_id));
+        $used_players = $used_r ? intval($used_r->fetch_assoc()['used']) : 0;
+        closeDBConnection($conn_dbg);
+    ?>
+        <div style="max-width:1200px;margin:0.5rem auto;padding:0 1rem;">
+            <div style="background:#fff7ed;border:1px solid #ffe1b8;color:#7a4b00; padding:10px;border-radius:8px;font-size:0.95rem;">
+                <strong>Selection counts:</strong> Total players = <?php echo $total_players; ?>, Used for room <?php echo intval($room_id); ?> = <?php echo $used_players; ?>
+            </div>
+        </div>
+    <?php endif; ?>
+
     <div class="auction-room">
         <div class="room-header">
             <div class="room-title">
@@ -1049,13 +1079,25 @@ if ($current_player) {
                     <div class="waiting-state">
                         <h2>🔄 Loading Next Player...</h2>
                         <p style="color: #94a3b8; margin-top: 1rem;">The system is automatically selecting the next player for auction</p>
+                        <?php
+                        // Prevent automatic repeated submissions causing reload loops.
+                        if (!isset($_SESSION['auto_next_submitted'])) $_SESSION['auto_next_submitted'] = [];
+                        $autoKey = 'room_' . $room_id;
+                        if (empty($_SESSION['auto_next_submitted'][$autoKey])) {
+                            // mark attempted so this auto-submit runs only once per session per room
+                            $_SESSION['auto_next_submitted'][$autoKey] = true;
+                        ?>
                         <form id="autoNextForm" method="POST" style="display:none;">
                             <input type="hidden" name="action" value="next_player">
                         </form>
                         <script>
                             try { window.suppressAutoPause = true; } catch (err) { }
+                            // submit once to request next player from server
                             document.getElementById('autoNextForm').submit();
                         </script>
+                        <?php } else { ?>
+                        <p style="color:#f59e0b; font-size:0.95rem;">Auto-selection already attempted — if no player appears, please click "Request Next Player" or refresh manually.</p>
+                        <?php } ?>
                     </div>
                     
                 <?php else: ?>
@@ -1117,8 +1159,8 @@ if ($current_player) {
 
                         <?php
                         // Check if user is in bidding war or if they can join
-                        $player1_id = $room['bidding_war_player1_id'];
-                        $player2_id = $room['bidding_war_player2_id'];
+                        $player1_id = $room['bidding_war_player1_id'] ?? null;
+                        $player2_id = $room['bidding_war_player2_id'] ?? null;
                         $is_in_war = ($participant_id == $player1_id || $participant_id == $player2_id);
                         $war_locked = ($player1_id && $player2_id);
                         $can_bid = !$war_locked || $is_in_war;
@@ -1172,10 +1214,10 @@ if ($current_player) {
                 <div id="biddingTab" class="tab-content active">
                 <?php if ($current_player): ?>
                     <?php 
-                    $player1_id = $room['bidding_war_player1_id'];
-                    $player2_id = $room['bidding_war_player2_id'];
-                    $player1_bid = $room['bidding_war_player1_bid'];
-                    $player2_bid = $room['bidding_war_player2_bid'];
+                    $player1_id = $room['bidding_war_player1_id'] ?? null;
+                    $player2_id = $room['bidding_war_player2_id'] ?? null;
+                    $player1_bid = $room['bidding_war_player1_bid'] ?? null;
+                    $player2_bid = $room['bidding_war_player2_bid'] ?? null;
                     
                     $player1 = $player1_id ? array_filter($participants, fn($p) => $p['participant_id'] == $player1_id) : null;
                     $player1 = $player1 ? reset($player1) : null;
