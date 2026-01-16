@@ -570,3 +570,115 @@
                     AND p.auction_group = 'A'
                     ORDER BY RAND() LIMIT 1
 [2026-01-16 16:28:21] fallback_player_for_group=A found=449
+[2026-01-16 16:28:42] room_id=1 initial_group=NULL db_current_group=A
+[2026-01-16 16:28:42] totalPlayers=487 usedCount=40
+[2026-01-16 16:28:42] fallback_sql_group=Marquee sql=SELECT p.* FROM players p
+                    WHERE p.player_id NOT IN (
+                        SELECT player_id FROM room_used_players WHERE room_id = 1
+                    )
+                    AND p.auction_group = 'Marquee'
+                    ORDER BY RAND() LIMIT 1
+[2026-01-16 16:28:42] fallback_player_for_group=Marquee found=NONE
+[2026-01-16 16:28:42] fallback_sql_group=A sql=SELECT p.* FROM players p
+                    WHERE p.player_id NOT IN (
+                        SELECT player_id FROM room_used_players WHERE room_id = 1
+                    )
+                    AND p.auction_group = 'A'
+                    ORDER BY RAND() LIMIT 1
+[2026-01-16 16:28:42] fallback_player_for_group=A found=6
+[2026-01-16 16:29:02] room_id=1 initial_group=NULL db_current_group=A
+[2026-01-16 16:29:02] totalPlayers=487 usedCount=41
+[2026-01-16 16:29:02] fallback_sql_group=Marquee sql=SELECT p.* FROM players p
+                    WHERE p.player_id NOT IN (
+                        SELECT player_id FROM room_used_players WHERE room_id = 1
+                    )
+                    AND p.auction_group = 'Marquee'
+                    ORDER BY RAND() LIMIT 1
+[2026-01-16 16:29:02] fallback_player_for_group=Marquee found=NONE
+[2026-01-16 16:29:02] fallback_sql_group=A sql=SELECT p.* FROM players p
+                    WHERE p.player_id NOT IN (
+                        SELECT player_id FROM room_used_players WHERE room_id = 1
+                    )
+                    AND p.auction_group = 'A'
+                    ORDER BY RAND() LIMIT 1
+[2026-01-16 16:29:02] fallback_player_for_group=A found=447
+[2026-01-16 16:29:22] room_id=1 initial_group=NULL db_current_group=A
+[2026-01-16 16:29:22] totalPlayers=487 usedCount=42
+[2026-01-16 16:29:22] fallback_sql_group=Marquee sql=SELECT p.* FROM players p
+                    WHERE p.player_id NOT IN (
+                        SELECT player_id FROM room_used_players WHERE room_id = 1
+                    )
+                    AND p.auction_group = 'Marquee'
+                    ORDER BY RAND() LIMIT 1
+[2026-01-16 16:29:23] fallback_player_for_group=Marquee found=NONE
+[2026-01-16 16:29:23] fallback_sql_group=A sql=SELECT p.* FROM players p
+                    WHERE p.player_id NOT IN (
+                        SELECT player_id FROM room_used_players WHERE room_id = 1
+                    )
+                    AND p.auction_group = 'A'
+                    ORDER BY RAND() LIMIT 1
+[2026-01-16 16:29:23] fallback_player_for_group=A found=431
+[2026-01-16 16:29:43] room_id=1 initial_group=NULL db_current_group=A
+[2026-01-16 16:29:43] totalPlayers=487 usedCount=43
+[2026-01-16 16:29:43] fallback_sql_group=Marquee sql=SELECT p.* FROM players p
+                    WHERE p.player_id NOT IN (
+                        SELECT player_id FROM room_used_players WHERE room_id = 1
+                    )
+                    AND p.auction_group = 'Marquee'
+                    ORDER BY RAND() LIMIT 1
+[2026-01-16 16:29:43] fallback_player_for_group=Marquee found=NONE
+[2026-01-16 16:29:43] fallback_sql_group=A sql=SELECT p.* FROM players p
+                    WHERE p.player_id NOT IN (
+                        SELECT player_id FROM room_used_players WHERE room_id = 1
+                    )
+                    AND p.auction_group = 'A'
+                    ORDER BY RAND() LIMIT 1
+[2026-01-16 16:29:43] fallback_player_for_group=A found=21
+[2026-01-16 16:30:03] room_id=1 initial_group=NULL db_current_group=A
+[2026-01-16 16:30:03] totalPlayers=487 usedCount=44
+[2026-01-16 16:30:03] fallback_sql_group=Marquee sql=SELECT p.* FROM players p
+                    WHERE p.player_id NOT IN (
+                        SELECT player_id FROM room_used_players WHERE room_id = 1
+                    )
+                    AND p.auction_group = 'Marquee'
+                    ORDER BY RAND() LIMIT 1
+[2026-01-16 16:30:03] fallback_player_for_group=Marquee found=NONE
+[2026-01-16 16:30:03] fallback_sql_group=A sql=SELECT p.* FROM players p
+                    WHERE p.player_id NOT IN (
+                        SELECT player_id FROM room_used_players WHERE room_id = 1
+                    )
+                    AND p.auction_group = 'A'
+                    ORDER BY RAND() LIMIT 1
+[2026-01-16 16:30:03] fallback_player_for_group=A found=92
+[2026-01-16 16:30:23] room_id=1 initial_group=NULL db_current_group=A
+[2026-01-16 16:30:23] totalPlayers=487 usedCount=45
+[2026-01-16 16:30:23] fallback_sql_group=Marquee sql=SELECT p.* FROM players p
+                    WHERE p.player_id NOT IN (
+                        SELECT player_id FROM room_used_players WHERE room_id = 1
+                    )
+                    AND p.auction_group = 'Marquee'
+                    ORDER BY RAND() LIMIT 1
+[2026-01-16 16:30:23] fallback_player_for_group=Marquee found=NONE
+[2026-01-16 16:30:23] fallback_sql_group=A sql=SELECT p.* FROM players p
+                    WHERE p.player_id NOT IN (
+                        SELECT player_id FROM room_used_players WHERE room_id = 1
+                    )
+                    AND p.auction_group = 'A'
+                    ORDER BY RAND() LIMIT 1
+[2026-01-16 16:30:23] fallback_player_for_group=A found=465
+[2026-01-16 16:30:43] room_id=1 initial_group=NULL db_current_group=A
+[2026-01-16 16:30:43] totalPlayers=487 usedCount=46
+[2026-01-16 16:30:43] fallback_sql_group=Marquee sql=SELECT p.* FROM players p
+                    WHERE p.player_id NOT IN (
+                        SELECT player_id FROM room_used_players WHERE room_id = 1
+                    )
+                    AND p.auction_group = 'Marquee'
+                    ORDER BY RAND() LIMIT 1
+[2026-01-16 16:30:43] fallback_player_for_group=Marquee found=NONE
+[2026-01-16 16:30:43] fallback_sql_group=A sql=SELECT p.* FROM players p
+                    WHERE p.player_id NOT IN (
+                        SELECT player_id FROM room_used_players WHERE room_id = 1
+                    )
+                    AND p.auction_group = 'A'
+                    ORDER BY RAND() LIMIT 1
+[2026-01-16 16:30:43] fallback_player_for_group=A found=485
