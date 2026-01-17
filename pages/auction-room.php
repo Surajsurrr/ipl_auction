@@ -317,6 +317,15 @@ if (empty($room['status']) || $room['status'] == '') {
     }
 }
 
+// If the auction is already finished/closed, redirect to the summary page
+// This prevents re-entry into the room after the host has ended the auction.
+$statusLower = strtolower(trim($room['status'] ?? ''));
+$endedFlag = !empty($room['ended_at']) || !empty($room['winner_participant_id']) || !empty($room['winner_team']);
+if ($statusLower === 'finished' || $statusLower === 'completed' || $endedFlag) {
+    header('Location: auction-summary.php?room_id=' . $room_id);
+    exit();
+}
+
 // Check for sale notification
 $sale_notification = null;
 if (isset($_SESSION['sale_notification'])) {
