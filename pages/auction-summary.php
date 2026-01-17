@@ -39,11 +39,36 @@ if (!$room) {
     exit;
 }
 
-// Only show summary after auction ends
+// Determine whether the auction is finished. Accept a few signals in case the
+// `status` field wasn't updated reliably (DB issues, earlier crashes, etc.).
 $status = strtolower(trim($room['status'] ?? ''));
 error_log("Auction Summary - Room ID: $room_id, Status: '$status', Raw Status: '{$room['status']}'");
 
-if ($status !== 'completed' && $status !== 'finished') {
+// Accept ended_at or winner fields as indicators of a finished auction
+$endedAt = !empty($room['ended_at']);
+$hasWinner = !empty($room['winner_participant_id']) || !empty($room['winner_team']);
+
+// If status isn't explicitly completed/finished, check fallback signals
+$treatAsFinished = ($status === 'completed' || $status === 'finished' || $endedAt || $hasWinner);
+
+// If still unknown, for single-room single-participant setups allow a fallback
+if (!$treatAsFinished) {
+    $participants = getRoomParticipants($room_id);
+    if (count($participants) === 1) {
+        // If there are assignments or ended_at set, treat as finished; otherwise don't assume.
+        $conn = getDBConnection();
+        $room_id_esc = $conn->real_escape_string($room_id);
+        $res = $conn->query("SELECT COUNT(*) AS cnt FROM room_player_assignments WHERE room_id = $room_id_esc");
+        $assignCount = ($res && ($r = $res->fetch_assoc())) ? intval($r['cnt']) : 0;
+        closeDBConnection($conn);
+        if ($assignCount > 0 || $endedAt || $hasWinner) {
+            $treatAsFinished = true;
+            error_log("Auction Summary - treating single-participant room $room_id as finished (assignCount=$assignCount)");
+        }
+    }
+}
+
+if (!$treatAsFinished) {
     echo "Auction is not finished yet. The summary will be available after the auction ends.<br>";
     echo "Current status: " . htmlspecialchars($room['status']);
     exit;

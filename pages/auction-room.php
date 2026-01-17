@@ -203,6 +203,19 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['action'])) {
             $winner_team = $winner['team_name'];
             $winner_team_esc = $conn->real_escape_string($winner_team);
             
+            // Ensure `ended_at` and winner columns exist (migration helper for older DBs)
+            $colCheck = $conn->query("SHOW COLUMNS FROM auction_rooms LIKE 'ended_at'");
+            if (!$colCheck || $colCheck->num_rows == 0) {
+                $conn->query("ALTER TABLE auction_rooms ADD COLUMN ended_at TIMESTAMP NULL DEFAULT NULL");
+            }
+            $colCheck2 = $conn->query("SHOW COLUMNS FROM auction_rooms LIKE 'winner_participant_id'");
+            if (!$colCheck2 || $colCheck2->num_rows == 0) {
+                $conn->query("ALTER TABLE auction_rooms 
+                    ADD COLUMN winner_participant_id INT NULL,
+                    ADD COLUMN winner_team VARCHAR(255) NULL,
+                    ADD COLUMN winner_announced_at TIMESTAMP NULL DEFAULT NULL");
+            }
+
             // Update room status to finished with winner info
             $sql = "UPDATE auction_rooms SET status = 'finished', ended_at = NOW(), winner_participant_id = $winner_pid, winner_team = '$winner_team_esc', winner_announced_at = NOW() WHERE room_id = $room_id_safe";
             error_log("Executing SQL: $sql");
@@ -225,16 +238,50 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['action'])) {
             ];
             @file_put_contents($annDir . '/announcement_room_' . $room_id . '.json', json_encode($announceData));
         } else {
-            // Multi-participant auction - set to completed for voting
-            $sql = "UPDATE auction_rooms SET status = 'completed', ended_at = NOW() WHERE room_id = $room_id_safe";
+            // Multi-participant auction - pick a winner (heuristic) then set to completed
+            // Determine winner by most players bought, tie-breaker by total spent
+            $stats_sql = "SELECT rp.participant_id, rp.team_name, COUNT(rpa.player_id) AS bought, COALESCE(SUM(rpa.sold_price),0) AS spent
+                          FROM room_participants rp
+                          LEFT JOIN room_player_assignments rpa ON rp.participant_id = rpa.participant_id AND rpa.room_id = $room_id_safe
+                          WHERE rp.room_id = $room_id_safe
+                          GROUP BY rp.participant_id
+                          ORDER BY bought DESC, spent DESC
+                          LIMIT 1";
+            $stats_res = $conn->query($stats_sql);
+            $winner_pid_calc = null;
+            $winner_team_calc = null;
+            if ($stats_res && $row = $stats_res->fetch_assoc()) {
+                $winner_pid_calc = intval($row['participant_id']);
+                $winner_team_calc = $conn->real_escape_string($row['team_name']);
+            }
+
+            // Ensure required columns exist
+            $colCheck = $conn->query("SHOW COLUMNS FROM auction_rooms LIKE 'ended_at'");
+            if (!$colCheck || $colCheck->num_rows == 0) {
+                $conn->query("ALTER TABLE auction_rooms ADD COLUMN ended_at TIMESTAMP NULL DEFAULT NULL");
+            }
+            $colCheck2 = $conn->query("SHOW COLUMNS FROM auction_rooms LIKE 'winner_participant_id'");
+            if (!$colCheck2 || $colCheck2->num_rows == 0) {
+                $conn->query("ALTER TABLE auction_rooms 
+                    ADD COLUMN winner_participant_id INT NULL,
+                    ADD COLUMN winner_team VARCHAR(255) NULL,
+                    ADD COLUMN winner_announced_at TIMESTAMP NULL DEFAULT NULL");
+            }
+
+            if ($winner_pid_calc) {
+                $sql = "UPDATE auction_rooms SET status = 'completed', ended_at = NOW(), winner_participant_id = $winner_pid_calc, winner_team = '$winner_team_calc', winner_announced_at = NOW() WHERE room_id = $room_id_safe";
+            } else {
+                $sql = "UPDATE auction_rooms SET status = 'completed', ended_at = NOW() WHERE room_id = $room_id_safe";
+            }
+
             error_log("Executing SQL: $sql");
             $update_result = $conn->query($sql);
-            
+
             if (!$update_result) {
                 error_log('Failed to update room status to completed: ' . $conn->error);
                 die('Database error: ' . $conn->error);
             }
-            
+
             error_log("Rows affected: " . $conn->affected_rows);
         }
         
@@ -985,7 +1032,7 @@ if ($current_player) {
         <div id="winnerBannerRoom" class="winner-banner" role="status" aria-live="polite" style="display:none;">
             <img id="winnerLogoRoom" src="" alt="winner logo" />
             <div>
-                <div class="winner-text">The winner is <span id="winnerTeamNameRoom"></span></div>
+                <div class="winner-text">Winner announced</div>
                 <div class="winner-sub" style="color:#cbd5e1;font-weight:600;">Announcement from host</div>
             </div>
         </div>
@@ -2085,15 +2132,13 @@ if ($current_player) {
             function showAnnouncementRoom(teamName, logo) {
                 try {
                     const banner = document.getElementById('winnerBannerRoom');
-                    const tEl = document.getElementById('winnerTeamNameRoom');
                     const lEl = document.getElementById('winnerLogoRoom');
-                    if (tEl) tEl.textContent = teamName;
                     if (lEl) {
                         if (logo) { lEl.src = logo; lEl.style.display = 'block'; } else { lEl.style.display = 'none'; }
                     }
                     if (banner) banner.style.display = 'flex';
                     try {
-                        const utter = new SpeechSynthesisUtterance('The winner is ' + teamName);
+                        const utter = new SpeechSynthesisUtterance('A winner has been announced');
                         window.speechSynthesis.cancel();
                         window.speechSynthesis.speak(utter);
                     } catch (e) { console.warn('TTS not available', e); }
