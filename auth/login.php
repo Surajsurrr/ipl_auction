@@ -98,11 +98,7 @@
             </p>
 
             <div style="margin-top: 2rem; padding: 1rem; background: #f8f9fa; border-radius: 5px;">
-                <p style="margin: 0 0 1rem 0; font-size: 0.9rem; color: #666;">
-                    <strong>🔐 Admin Login:</strong><br>
-                    Username: admin<br>
-                    Password: admin123
-                </p>
+                
                 <p style="margin: 0; font-size: 0.9rem; color: #666;">
                     <strong>👤 User Login:</strong><br>
                     Register a new account or use existing credentials
