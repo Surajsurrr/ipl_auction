@@ -43,12 +43,29 @@ if (!getenv('DB_HOST') && !getenv('DATABASE_URL')) {
 function getDBConnection() {
     $dbToUse = (defined('DB_NAME_TEMP_TEST') && DB_NAME_TEMP_TEST) ? DB_NAME_TEMP_TEST : DB_NAME;
     
-    // Silence raw errors and catch cleanly
-    $conn = @new mysqli(DB_HOST, DB_USER, DB_PASS, $dbToUse, DB_PORT);
-
-    if ($conn->connect_error) {
-        error_log("Database connection error: " . $conn->connect_error);
+    $conn = mysqli_init();
+    if (!$conn) {
+        error_log("Database initialization error");
         die("Database connection failed. Please check your database settings or environment variables.");
+    }
+
+    $conn->options(MYSQLI_OPT_CONNECT_TIMEOUT, 10);
+
+    // If connecting to a remote cloud host (like TiDB Cloud), enable SSL/TLS
+    $isRemote = (DB_HOST !== 'localhost' && DB_HOST !== '127.0.0.1' && DB_HOST !== '::1');
+    if ($isRemote) {
+        if (file_exists('/etc/ssl/certs/ca-certificates.crt')) {
+            $conn->ssl_set(NULL, NULL, '/etc/ssl/certs/ca-certificates.crt', NULL, NULL);
+        }
+        $connected = @$conn->real_connect(DB_HOST, DB_USER, DB_PASS, $dbToUse, DB_PORT, NULL, MYSQLI_CLIENT_SSL);
+    } else {
+        $connected = @$conn->real_connect(DB_HOST, DB_USER, DB_PASS, $dbToUse, DB_PORT);
+    }
+
+    if (!$connected || $conn->connect_error) {
+        $errorMsg = $conn->connect_error ?: mysqli_connect_error();
+        error_log("Database connection error: " . $errorMsg);
+        die("Database connection failed: " . htmlspecialchars($errorMsg));
     }
 
     $conn->set_charset("utf8mb4");

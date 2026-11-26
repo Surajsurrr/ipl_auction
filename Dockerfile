@@ -1,6 +1,9 @@
 # Use the official FrankenPHP Alpine image with PHP 8.3
 FROM dunglas/frankenphp:1-php8.3-alpine
 
+# Install system dependencies and ca-certificates for secure cloud database connections (TiDB)
+RUN apk add --no-cache ca-certificates
+
 # Install required PHP extensions for MySQL and performance
 RUN install-php-extensions mysqli pdo_mysql opcache
 
@@ -29,4 +32,3 @@ ENV PORT=80
 
 # Run FrankenPHP with custom Caddyfile
 CMD ["frankenphp", "run", "--config", "/etc/caddy/Caddyfile"]
-
