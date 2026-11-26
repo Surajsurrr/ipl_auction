@@ -1,5 +1,7 @@
 <?php
 require_once __DIR__ . '/../config/session.php';
+session_write_close();
+
 header('Content-Type: application/json');
 
 $room_id = isset($_GET['room_id']) ? intval($_GET['room_id']) : 0;

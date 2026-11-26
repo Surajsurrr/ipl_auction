@@ -1,6 +1,7 @@
 {
     admin off
     auto_https off
+    http_port {$PORT:80}
 }
 
 :{$PORT:80} {
@@ -25,3 +26,4 @@
     # Run PHP scripts natively and serve static files directly
     php_server
 }
+

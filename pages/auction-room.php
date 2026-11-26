@@ -1951,6 +1951,8 @@ if ($current_player) {
         const currentRoomId = <?php echo intval($room_id); ?>;
         const currentParticipantId = <?php echo intval($participant_id); ?>;
         const initialPlayerId = <?php echo $current_player ? intval($current_player['player_id']) : 'null'; ?>;
+        let initialRoomStatus = '<?php echo $room['status']; ?>';
+        let currentParticipantCount = <?php echo count($participants); ?>;
         let lastSeenSaleId = null;
         let currentRoomHash = '';
         let isSyncing = false;
@@ -2024,6 +2026,26 @@ if ($current_player) {
                 // If auction is completed or finished, redirect all participants immediately
                 if (data.status === 'completed' || data.status === 'finished') {
                     window.location.href = `auction-summary.php?room_id=${currentRoomId}`;
+                    return;
+                }
+
+                // A. Detect host starting the auction from waiting state -> reload all participants immediately
+                if (initialRoomStatus === 'waiting' && data.status && data.status !== 'waiting') {
+                    console.log('Auction started by host! Reloading into live room...');
+                    window.location.reload();
+                    return;
+                }
+                if (initialRoomStatus !== data.status && (data.status === 'in_progress' || data.status === 'paused')) {
+                    console.log('Room status changed from ' + initialRoomStatus + ' to ' + data.status + '! Reloading...');
+                    window.location.reload();
+                    return;
+                }
+
+                // B. In waiting room: detect when a new team enters or leaves -> reload waiting room immediately
+                if (initialRoomStatus === 'waiting' && data.participant_count !== undefined && data.participant_count !== currentParticipantCount) {
+                    console.log(`Participant count changed from ${currentParticipantCount} to ${data.participant_count}! Reloading waiting room...`);
+                    currentParticipantCount = data.participant_count;
+                    window.location.reload();
                     return;
                 }
 
@@ -2252,8 +2274,8 @@ if ($current_player) {
             });
         }
 
-        // Start high-frequency real-time polling (every 500ms)
-        setInterval(syncRoomState, 500);
+        // Start real-time polling (every 750ms)
+        setInterval(syncRoomState, 750);
 
         // Start timer and setup bidding on window load
         window.addEventListener('load', function() {

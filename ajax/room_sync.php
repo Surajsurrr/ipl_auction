@@ -1,5 +1,8 @@
 <?php
 require_once __DIR__ . '/../config/session.php';
+// Release session lock immediately so other requests, bids, and page navigation are never blocked
+session_write_close();
+
 require_once __DIR__ . '/../config/database.php';
 require_once __DIR__ . '/../includes/auction_room_functions.php';
 require_once __DIR__ . '/../includes/player_functions.php';
@@ -27,17 +30,31 @@ $sql = "SELECT r.*,
         WHERE r.room_id = $room_id_safe";
 $res = $conn->query($sql);
 if (!$res || $res->num_rows === 0) {
-    closeDBConnection($conn);
     echo json_encode(['success' => false, 'error' => 'Room not found']);
     exit;
 }
 $room = $res->fetch_assoc();
 
+// 2. Fetch all participants to track waiting room entries, roster counts, and budget changes
+$part_res = $conn->query("SELECT participant_id, user_id, team_name, remaining_budget, players_count, is_host FROM room_participants WHERE room_id = $room_id_safe ORDER BY participant_id ASC");
+$participants = [];
+$part_hash_tokens = [];
+if ($part_res) {
+    while ($p = $part_res->fetch_assoc()) {
+        $p['logo'] = function_exists('getTeamLogoPath') ? getTeamLogoPath($p['team_name']) : null;
+        $part_hash_tokens[] = $p['participant_id'] . ':' . $p['remaining_budget'] . ':' . ($p['players_count'] ?? 0);
+        $participants[$p['participant_id']] = $p;
+    }
+}
+$part_hash = implode('|', $part_hash_tokens);
+$participant_count = count($participants);
+$max_participants = intval($room['max_participants'] ?? 10);
+
 // Check last sale broadcast file
 $last_sale_file = __DIR__ . '/../data/announcements/last_sale_room_' . $room_id . '.json';
 $last_sale_ts = file_exists($last_sale_file) ? filemtime($last_sale_file) : 0;
 
-// Compute state hash
+// Compute comprehensive state hash including status, bids, timers, sales, and participants
 $state_hash = md5(
     ($room['status'] ?? '') . '_' .
     ($room['current_player_id'] ?? 'null') . '_' .
@@ -49,23 +66,25 @@ $state_hash = md5(
     ($room['bidding_war_player1_bid'] ?? '0') . '_' .
     ($room['bidding_war_player2_id'] ?? 'null') . '_' .
     ($room['bidding_war_player2_bid'] ?? '0') . '_' .
-    $last_sale_ts
+    $last_sale_ts . '_' .
+    $part_hash
 );
 
-// If client hash matches, return lightweight ping
+// If client hash matches, return lightweight ping with status and participant count
 if ($client_hash === $state_hash) {
     $seconds = max(0, intval($room['seconds_remaining'] ?? 0));
     if ($room['status'] === 'paused') {
         $seconds = intval($room['paused_time_remaining'] ?? 0);
     }
-    closeDBConnection($conn);
     echo json_encode([
         'success' => true,
         'changed' => false,
         'hash' => $state_hash,
         'status' => $room['status'],
         'time_remaining' => $seconds,
-        'timer_expires_ts' => $room['timer_expires_ts'] ? (intval($room['timer_expires_ts']) * 1000) : null
+        'timer_expires_ts' => $room['timer_expires_ts'] ? (intval($room['timer_expires_ts']) * 1000) : null,
+        'participant_count' => $participant_count,
+        'max_participants' => $max_participants
     ]);
     exit;
 }
@@ -88,14 +107,6 @@ if (!empty($room['current_player_id'])) {
             'nationality' => $p_row['nationality']
         ];
     }
-}
-
-// Participants map for bidder details
-$part_res = $conn->query("SELECT participant_id, user_id, team_name, remaining_budget, players_count FROM room_participants WHERE room_id = $room_id_safe");
-$participants = [];
-while ($p = $part_res->fetch_assoc()) {
-    $p['logo'] = function_exists('getTeamLogoPath') ? getTeamLogoPath($p['team_name']) : null;
-    $participants[$p['participant_id']] = $p;
 }
 
 // Current bidder info
@@ -171,8 +182,6 @@ if (file_exists($last_sale_file)) {
     $last_sale = json_decode(@file_get_contents($last_sale_file), true);
 }
 
-closeDBConnection($conn);
-
 $seconds = max(0, intval($room['seconds_remaining'] ?? 0));
 if ($room['status'] === 'paused') {
     $seconds = intval($room['paused_time_remaining'] ?? 0);
@@ -183,6 +192,8 @@ echo json_encode([
     'changed' => true,
     'hash' => $state_hash,
     'status' => $room['status'],
+    'participant_count' => $participant_count,
+    'max_participants' => $max_participants,
     'current_player' => $current_player,
     'current_bid' => $current_bid,
     'current_bid_cr' => number_format($current_bid / 10000000, 2),
@@ -200,4 +211,3 @@ echo json_encode([
     'participants' => array_values($participants)
 ]);
 exit;
-

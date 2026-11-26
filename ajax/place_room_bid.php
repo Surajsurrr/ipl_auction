@@ -8,6 +8,8 @@ header('Content-Type: application/json');
 
 // Ensure user is logged in
 $user = getCurrentUser();
+session_write_close();
+
 if (!$user) {
     echo json_encode(['success' => false, 'message' => 'Not authenticated']);
     exit;
@@ -68,4 +70,3 @@ echo json_encode([
     'current_bidder_id' => $participant_id
 ]);
 exit;
-
