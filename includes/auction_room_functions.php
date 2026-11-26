@@ -212,7 +212,7 @@ function getRoomParticipants($room_id) {
     $room_id = $conn->real_escape_string($room_id);
     
     $sql = "SELECT rp.*, u.username, u.full_name,
-            (SELECT COUNT(*) FROM room_player_assignments WHERE participant_id = rp.participant_id) as players_bought
+            COALESCE(rp.players_count, 0) as players_bought
             FROM room_participants rp
             JOIN users u ON rp.user_id = u.user_id
             WHERE rp.room_id = $room_id
@@ -279,20 +279,7 @@ function startAuctionRoom($room_id, $user_id) {
         return ['success' => false, 'message' => 'Only host can start auction'];
     }
     
-    // Update room status and ensure we start from Marquee group
-    // Ensure 'current_auction_group' column exists (migration may not have been run)
-    $colCheck = $conn->query("SHOW COLUMNS FROM auction_rooms LIKE 'current_auction_group'");
-    if (!$colCheck || $colCheck->num_rows == 0) {
-        error_log("[startAuctionRoom] current_auction_group column missing, attempting to add it");
-        $alterSql = "ALTER TABLE auction_rooms ADD COLUMN current_auction_group VARCHAR(20) DEFAULT 'Marquee' AFTER status";
-        if ($conn->query($alterSql)) {
-            error_log("[startAuctionRoom] Added current_auction_group column successfully");
-        } else {
-            error_log("[startAuctionRoom] Failed to add current_auction_group column: " . $conn->error);
-            // Continue - UPDATE will likely fail and be logged below
-        }
-    }
-
+    // Update room status and start from Marquee group
     $update_sql = "UPDATE auction_rooms SET status = 'in_progress', started_at = NOW(), current_auction_group = 'Marquee' WHERE room_id = $room_id";
 
     // Log the UPDATE for debugging (will appear in PHP error log)
@@ -477,8 +464,6 @@ function getNextPlayerForRoom($room_id, $group = null) {
 // Place bid in room
 function placeBidInRoom($room_id, $participant_id, $bid_amount) {
     $conn = getDBConnection();
-    // Ensure bidding war tracking columns exist (migration helper)
-    ensureBiddingWarColumns($conn);
     $room_id = $conn->real_escape_string($room_id);
     $participant_id = $conn->real_escape_string($participant_id);
     $bid_amount = $conn->real_escape_string($bid_amount);

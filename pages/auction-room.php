@@ -1031,7 +1031,7 @@ if ($current_player) {
             // Show stop/restart buttons for host (always visible to host)
             if ($is_host): 
             ?>
-                <form method="POST" style="margin: 0;">
+                <form method="POST" style="margin: 0;" onsubmit="event.preventDefault(); executeRoomAction('<?php echo $room['status'] == 'paused' ? 'resume' : 'pause'; ?>');">
                     <input type="hidden" name="action" value="<?php echo $room['status'] == 'paused' ? 'resume' : 'pause'; ?>">
                     <button type="submit" style="padding: 0.75rem 1.5rem; background: <?php echo $room['status'] == 'paused' ? 'linear-gradient(135deg, #34d399, #10b981)' : 'linear-gradient(135deg, #ef4444, #dc2626)'; ?>; color: white; border: none; border-radius: 8px; font-weight: 600; cursor: pointer; transition: all 0.3s; font-size: 1rem; box-shadow: 0 4px 6px rgba(0,0,0,0.3);">
                         <?php echo $room['status'] == 'paused' ? '▶️ Resume Auction' : '⏸️ Pause Auction'; ?>
@@ -1104,9 +1104,9 @@ if ($current_player) {
                         <p style="color: #94a3b8;">Players have joined</p>
                         
                         <?php if ($is_host): ?>
-                            <form method="POST" style="margin-top: 2rem;">
+                            <form method="POST" style="margin-top: 2rem;" onsubmit="event.preventDefault(); executeRoomAction('start');">
                                 <input type="hidden" name="action" value="start">
-                                <button type="submit" class="btn-start">Start Auction</button>
+                                <button type="submit" class="btn-start" id="startAuctionBtn">Start Auction</button>
                             </form>
                         <?php else: ?>
                             <p style="margin-top: 2rem; color: #fbbf24;">Waiting for host to start...</p>
@@ -1244,7 +1244,7 @@ if ($current_player) {
                                 </button>
                             </form>
                             <?php if ($is_in_war): ?>
-                                <form method="POST" id="quitBidForm" style="flex: 1;">
+                                <form method="POST" id="quitBidForm" style="flex: 1;" onsubmit="event.preventDefault(); executeRoomAction('quit_bid');">
                                     <input type="hidden" name="action" value="quit_bid">
                                     <button type="submit" class="btn-not-interested">
                                         ❌ Quit Bidding
@@ -2238,6 +2238,28 @@ if ($current_player) {
                         <div style="color: #64748b; font-size: 0.875rem; margin-top: 0.5rem;">Waiting for first bid...</div>
                     </div>
                 `;
+            }
+        }
+
+        // Execute room actions (pause, resume, start, next player, quit) via instant AJAX without page reloads
+        async function executeRoomAction(action, extraData = {}) {
+            try {
+                const fd = new FormData();
+                fd.append('room_id', currentRoomId);
+                fd.append('action', action);
+                for (const [k, v] of Object.entries(extraData)) {
+                    fd.append(k, v);
+                }
+                const res = await fetch('../ajax/room_action.php', { method: 'POST', body: fd });
+                const data = await res.json();
+                if (data.success) {
+                    await syncRoomState(true);
+                } else {
+                    alert(data.message || 'Action could not be completed');
+                }
+            } catch (err) {
+                console.error('AJAX room action failed, falling back to standard submit:', err);
+                window.location.reload();
             }
         }
 
