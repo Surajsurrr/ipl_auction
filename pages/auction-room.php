@@ -2013,7 +2013,8 @@ if ($current_player) {
             if (isSyncing && !force) return;
             isSyncing = true;
             try {
-                const url = `../ajax/room_sync.php?room_id=${currentRoomId}&participant_id=${currentParticipantId}&hash=${encodeURIComponent(currentRoomHash)}`;
+                const isHostParam = (typeof window.isHost !== 'undefined' && window.isHost) ? '1' : '0';
+                const url = `../ajax/room_sync.php?room_id=${currentRoomId}&participant_id=${currentParticipantId}&is_host=${isHostParam}&hash=${encodeURIComponent(currentRoomHash)}`;
                 const resp = await fetch(url, { cache: 'no-store' });
                 if (!resp.ok) throw new Error('Sync fetch failed: ' + resp.status);
                 const data = await resp.json();
@@ -2277,8 +2278,8 @@ if ($current_player) {
             });
         }
 
-        // Start real-time polling (every 750ms)
-        setInterval(syncRoomState, 750);
+        // Start real-time sync polling (every 1.2s - lightweight hash check)
+        setInterval(syncRoomState, 1200);
 
         // Start timer and setup bidding on window load
         window.addEventListener('load', function() {
@@ -2342,74 +2343,10 @@ if ($current_player) {
             }
         });
 
-        // Host heartbeat: inform server we are still connected. Runs only for host.
-        try {
-            if (window.isHost === undefined) window.isHost = <?php echo $is_host ? 'true' : 'false'; ?>;
-            if (window.isHost) {
-                function sendHostPing() {
-                    try {
-                        var fd = new FormData();
-                        fd.append('room_id', '<?php echo $room_id; ?>');
-                        if (navigator.sendBeacon) {
-                            navigator.sendBeacon('host_ping.php', fd);
-                        } else {
-                            fetch('host_ping.php', { method: 'POST', body: fd }).catch(()=>{});
-                        }
-                    } catch (e) { console.error(e); }
-                }
-
-                // immediate ping and periodic pings
-                sendHostPing();
-                setInterval(sendHostPing, 2000);
-            }
-        } catch (err) {
-            console.error('Heartbeat init error', err);
-        }
+        // Host flag (used by syncRoomState to bundle host heartbeat)
+        window.isHost = <?php echo $is_host ? 'true' : 'false'; ?>;
         
         <?php endif; ?>
-        // Announcement polling for winner broadcast
-        (function(){
-            const participants = <?php echo json_encode($participants); ?>;
-            const roomIdForAnn = '<?php echo intval($room_id); ?>';
-            let announced = false;
-
-            function showAnnouncementRoom(teamName, logo) {
-                try {
-                    const banner = document.getElementById('winnerBannerRoom');
-                    const lEl = document.getElementById('winnerLogoRoom');
-                    if (lEl) {
-                        if (logo) { lEl.src = logo; lEl.style.display = 'block'; } else { lEl.style.display = 'none'; }
-                    }
-                    if (banner) banner.style.display = 'flex';
-                    try {
-                        const utter = new SpeechSynthesisUtterance('A winner has been announced');
-                        window.speechSynthesis.cancel();
-                        window.speechSynthesis.speak(utter);
-                    } catch (e) { console.warn('TTS not available', e); }
-                } catch (e) { console.error('Show announcement failed', e); }
-            }
-
-            async function checkAnnouncementRoom() {
-                try {
-                    const res = await fetch('../ajax/get_announcement.php?room_id=' + encodeURIComponent(roomIdForAnn));
-                    const data = await res.json();
-                    if (!data.success) return;
-                    if (data.has && data.announcement && !announced) {
-                        announced = true;
-                        const ann = data.announcement;
-                        const winning = participants.find(p => String(p.participant_id) === String(ann.winner_participant_id));
-                        const name = ann.winner_team || (winning ? winning.team_name : 'Winner');
-                        const logo = winning ? (winning.logo || '') : '';
-                        showAnnouncementRoom(name, logo);
-                    }
-                } catch (e) { /* ignore */ }
-            }
-
-            // start polling every 3s
-            setInterval(checkAnnouncementRoom, 3000);
-            // also run once immediately
-            checkAnnouncementRoom();
-        })();
 
         // ============================================================================
         // TAB SWITCHING
@@ -2434,8 +2371,9 @@ if ($current_player) {
                 document.getElementById('chatTab').classList.add('active');
                 document.querySelectorAll('.tab-btn')[1].classList.add('active');
                 
-                // Clear notification badge when opening chat
+                // Clear notification badge when opening chat and fetch latest messages
                 clearChatBadge();
+                fetchMessages();
             }
         }
 
@@ -2633,8 +2571,14 @@ if ($current_player) {
             }
         });
 
-        // Poll for new messages every 2 seconds
-        setInterval(fetchMessages, 2000);
+        // Poll for new messages when chat tab is active (every 3.5s)
+        function pollChatIfActive() {
+            const chatTab = document.getElementById('chatTab');
+            if (chatTab && chatTab.classList.contains('active')) {
+                fetchMessages();
+            }
+        }
+        setInterval(pollChatIfActive, 3500);
         fetchMessages(); // Initial load
     </script>
 </body>

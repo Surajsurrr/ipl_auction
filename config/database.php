@@ -2,7 +2,7 @@
 /**
  * Database Configuration
  * Supports both local development (XAMPP default) and production environment variables (Vercel).
- * Optimized with connection pooling and request-level connection reuse for high performance.
+ * Optimized for low-latency direct SSL connections without dead-socket persistent pool stalls.
  */
 
 // Parse DATABASE_URL or MYSQL_URL if provided (e.g. mysql://user:pass@host:port/dbname)
@@ -39,7 +39,7 @@ if (!getenv('DB_HOST') && !getenv('DATABASE_URL')) {
 }
 
 /**
- * Get active MySQL connection with connection pooling & reuse
+ * Get active MySQL connection with connection reuse per request
  */
 function getDBConnection() {
     static $cachedConn = null;
@@ -57,27 +57,17 @@ function getDBConnection() {
         die("Database connection failed. Please check your database settings or environment variables.");
     }
 
-    $conn->options(MYSQLI_OPT_CONNECT_TIMEOUT, 6);
+    // Fast 3-second connection timeout (eliminates long hangs on network hiccups)
+    $conn->options(MYSQLI_OPT_CONNECT_TIMEOUT, 3);
 
-    // If connecting to a remote cloud host (like TiDB Cloud), enable SSL/TLS and persistent pooling
+    // Remote cloud host (TiDB Cloud) with direct SSL/TLS
     $isRemote = (DB_HOST !== 'localhost' && DB_HOST !== '127.0.0.1' && DB_HOST !== '::1');
-    $hostToUse = $isRemote ? ('p:' . DB_HOST) : DB_HOST;
 
     if ($isRemote) {
         if (file_exists('/etc/ssl/certs/ca-certificates.crt')) {
             $conn->ssl_set(NULL, NULL, '/etc/ssl/certs/ca-certificates.crt', NULL, NULL);
         }
-        $connected = @$conn->real_connect($hostToUse, DB_USER, DB_PASS, $dbToUse, DB_PORT, NULL, MYSQLI_CLIENT_SSL);
-        
-        // Fallback to non-persistent connection if p: is unsupported on some drivers
-        if (!$connected) {
-            $conn = mysqli_init();
-            $conn->options(MYSQLI_OPT_CONNECT_TIMEOUT, 6);
-            if (file_exists('/etc/ssl/certs/ca-certificates.crt')) {
-                $conn->ssl_set(NULL, NULL, '/etc/ssl/certs/ca-certificates.crt', NULL, NULL);
-            }
-            $connected = @$conn->real_connect(DB_HOST, DB_USER, DB_PASS, $dbToUse, DB_PORT, NULL, MYSQLI_CLIENT_SSL);
-        }
+        $connected = @$conn->real_connect(DB_HOST, DB_USER, DB_PASS, $dbToUse, DB_PORT, NULL, MYSQLI_CLIENT_SSL);
     } else {
         $connected = @$conn->real_connect(DB_HOST, DB_USER, DB_PASS, $dbToUse, DB_PORT);
     }
@@ -98,7 +88,7 @@ function getDBConnection() {
  * Note: Keeps connection cached for other queries in the same request to avoid repeated TLS handshakes.
  */
 function closeDBConnection($conn) {
-    // Intentionally kept alive for request-level reuse. PHP closes automatically on script termination.
+    // Kept alive for request-level reuse. PHP closes automatically upon script termination.
 }
 
 /**

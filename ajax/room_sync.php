@@ -13,6 +13,7 @@ header('Cache-Control: no-cache, no-store, must-revalidate');
 $room_id = isset($_GET['room_id']) ? intval($_GET['room_id']) : 0;
 $client_hash = isset($_GET['hash']) ? trim($_GET['hash']) : '';
 $current_pid = isset($_GET['participant_id']) ? intval($_GET['participant_id']) : 0;
+$is_host_req = !empty($_GET['is_host']);
 
 if (!$room_id) {
     echo json_encode(['success' => false, 'error' => 'Missing room_id']);
@@ -21,6 +22,12 @@ if (!$room_id) {
 
 $conn = getDBConnection();
 $room_id_safe = intval($room_id);
+
+// Refresh host heartbeat directly in sync call (eliminates separate host_ping HTTP requests)
+if ($is_host_req) {
+    $now = time();
+    $conn->query("UPDATE auction_rooms SET host_last_ping = $now WHERE room_id = $room_id_safe");
+}
 
 // 1. Fetch room row with unix timestamp for timer
 $sql = "SELECT r.*, 
