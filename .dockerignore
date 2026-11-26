@@ -1,0 +1,10 @@
+.git
+.gitignore
+.env
+*.log
+*.tmp
+*.docx
+ipl_auction_database_backup/
+database_import_errors.txt
+players_migration_errors.txt
+

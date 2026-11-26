@@ -1,0 +1,29 @@
+{
+    admin off
+    auto_https off
+    http_port {$PORT:80}
+}
+
+:{$PORT:80} {
+    root * /app
+    encode zstd br gzip
+
+    # Block access to sensitive directories, database dumps, and config files
+    @blocked {
+        path /config/*
+        path /database/*
+        path /includes/*
+        path /tools/*
+        path /ipl_auction_database_backup/*
+        path /.git/*
+        path /.env*
+        path *.sql
+        path *.md
+        path *.log
+    }
+    respond @blocked 404
+
+    # Run PHP scripts natively and serve static files directly
+    php_server
+}
+

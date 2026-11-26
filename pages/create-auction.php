@@ -217,7 +217,12 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
                     <h3>📢 Share with Friends</h3>
                     <p>Share this code with your friends so they can join your auction!</p>
                     <p><strong>Room Code:</strong> <?php echo htmlspecialchars($room_code); ?></p>
-                    <p><strong>Join URL:</strong> <?php echo 'http://' . $_SERVER['HTTP_HOST'] . '/ipl_auction/pages/join-auction.php?code=' . $room_code; ?></p>
+                    <?php 
+                    $basePrefix = (strpos($_SERVER['REQUEST_URI'] ?? '', '/ipl_auction') !== false) ? '/ipl_auction' : '';
+                    $protocol = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') || ($_SERVER['SERVER_PORT'] ?? 80) == 443 || (isset($_SERVER['HTTP_X_FORWARDED_PROTO']) && $_SERVER['HTTP_X_FORWARDED_PROTO'] === 'https') ? 'https' : 'http';
+                    $joinUrl = $protocol . '://' . $_SERVER['HTTP_HOST'] . $basePrefix . '/pages/join-auction.php?code=' . urlencode($room_code);
+                    ?>
+                    <p><strong>Join URL:</strong> <?php echo htmlspecialchars($joinUrl); ?></p>
                 </div>
                 
                 <a href="auction-room.php?room_id=<?php echo $room_id; ?>" class="btn-create" style="margin-top: 2rem;">

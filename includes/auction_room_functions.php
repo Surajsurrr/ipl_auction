@@ -12,6 +12,31 @@ function _grf_debug($msg) {
 }
 
 // Allowed teams for participants
+if (!function_exists('getTeamLogoPath')) {
+    function getTeamLogoPath($team_name) {
+        $team_logos = [
+            'Chennai' => '../assets/images/teams/csk.png',
+            'Delhi' => '../assets/images/teams/dc.png',
+            'Mumbai' => '../assets/images/teams/mi.png',
+            'Kolkata' => '../assets/images/teams/kkr.png',
+            'Gujarat' => '../assets/images/teams/gt.png',
+            'Royal' => '../assets/images/teams/rcb.png',
+            'Rajasthan' => '../assets/images/teams/rr.png',
+            'Sunrisers' => '../assets/images/teams/srh.png',
+            'Lucknow' => '../assets/images/teams/lsg.png',
+            'Punjab' => '../assets/images/teams/pbks.png'
+        ];
+
+        foreach ($team_logos as $key => $path) {
+            if (stripos($team_name, $key) !== false) {
+                return $path;
+            }
+        }
+
+        return null;
+    }
+}
+
 function getAllowedTeams() {
     return [
         'Mumbai Indians',
@@ -604,6 +629,36 @@ function finalizePlayerInRoom($room_id) {
                      WHERE room_id = $room_id AND player_id = {$room['current_player_id']}";
         $conn->query($mark_sql);
     }
+
+    // Broadcast sale notification to all connected participants
+    $annDir = __DIR__ . '/../data/announcements';
+    if (!is_dir($annDir)) @mkdir($annDir, 0755, true);
+
+    $p_info = null;
+    if (!empty($room['current_player_id'])) {
+        $p_res = $conn->query("SELECT player_name, player_type, base_price FROM players WHERE player_id = " . intval($room['current_player_id']));
+        $p_info = ($p_res && $p_res->num_rows > 0) ? $p_res->fetch_assoc() : null;
+    }
+
+    $bidder_info = null;
+    if (!empty($room['current_bidder_id'])) {
+        $b_res = $conn->query("SELECT team_name FROM room_participants WHERE participant_id = " . intval($room['current_bidder_id']));
+        $bidder_info = ($b_res && $b_res->num_rows > 0) ? $b_res->fetch_assoc() : null;
+    }
+
+    $saleBroadcast = [
+        'sale_id' => uniqid('sale_', true),
+        'player_id' => $room['current_player_id'],
+        'player_name' => $p_info ? $p_info['player_name'] : 'Player',
+        'player_type' => $p_info ? $p_info['player_type'] : '',
+        'base_price' => $p_info ? floatval($p_info['base_price']) : 0,
+        'sold_price' => floatval($room['current_bid']),
+        'team_name' => $bidder_info ? $bidder_info['team_name'] : null,
+        'team_logo' => $bidder_info ? getTeamLogoPath($bidder_info['team_name']) : null,
+        'is_sold' => !empty($room['current_bidder_id']),
+        'timestamp' => time()
+    ];
+    @file_put_contents($annDir . '/last_sale_room_' . $room_id . '.json', json_encode($saleBroadcast));
 
     // Clear current player and reset timer and bidding war
     $clear_sql = "UPDATE auction_rooms 

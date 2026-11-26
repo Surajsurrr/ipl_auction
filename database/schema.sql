@@ -38,6 +38,7 @@ CREATE TABLE teams (
     total_budget DECIMAL(15, 2) DEFAULT 12000000000.00, -- 120 crore in paise
     remaining_budget DECIMAL(15, 2) DEFAULT 12000000000.00,
     players_count INT DEFAULT 0,
+    championships INT DEFAULT 0,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (owner_user_id) REFERENCES users(user_id) ON DELETE SET NULL
 );
@@ -90,8 +91,8 @@ CREATE TABLE auction_session (
     current_bid DECIMAL(15, 2),
     current_bidder_team_id INT,
     auction_status ENUM('Not Started', 'In Progress', 'Completed') DEFAULT 'Not Started',
-    started_at TIMESTAMP,
-    ended_at TIMESTAMP,
+    started_at TIMESTAMP NULL DEFAULT NULL,
+    ended_at TIMESTAMP NULL DEFAULT NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (current_player_id) REFERENCES players(player_id) ON DELETE SET NULL,
     FOREIGN KEY (current_bidder_team_id) REFERENCES teams(team_id) ON DELETE SET NULL
@@ -280,14 +281,24 @@ CREATE TABLE auction_rooms (
     room_name VARCHAR(100) NOT NULL,
     created_by INT NOT NULL,
     max_participants INT DEFAULT 10,
-    status ENUM('waiting', 'in_progress', 'completed') DEFAULT 'waiting',
+    status ENUM('waiting', 'in_progress', 'active', 'paused', 'finished', 'completed') DEFAULT 'waiting',
     current_player_id INT,
     current_bid DECIMAL(15, 2),
     current_bidder_id INT,
     total_budget_per_team DECIMAL(15, 2) DEFAULT 12000000000.00,
+    bid_timer_expires_at TIMESTAMP NULL DEFAULT NULL,
+    paused_time_remaining INT DEFAULT 0,
+    bidding_war_player1_id INT NULL,
+    bidding_war_player2_id INT NULL,
+    bidding_war_player1_bid DECIMAL(15, 2) NULL,
+    bidding_war_player2_bid DECIMAL(15, 2) NULL,
+    winner_participant_id INT NULL,
+    winner_team VARCHAR(255) NULL,
+    winner_announced_at TIMESTAMP NULL DEFAULT NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     started_at TIMESTAMP NULL,
     completed_at TIMESTAMP NULL,
+    ended_at TIMESTAMP NULL,
     FOREIGN KEY (created_by) REFERENCES users(user_id) ON DELETE CASCADE
 );
 

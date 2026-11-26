@@ -6,27 +6,29 @@ require_once '../includes/player_functions.php';
 requireLogin();
 
 // Helper: return a team logo path (or null) by matching known name fragments
-function getTeamLogoPath($team_name) {
-    $team_logos = [
-        'Chennai' => '../assets/images/teams/csk.png',
-        'Delhi' => '../assets/images/teams/dc.png',
-        'Mumbai' => '../assets/images/teams/mi.png',
-        'Kolkata' => '../assets/images/teams/kkr.png',
-        'Gujarat' => '../assets/images/teams/gt.png',
-        'Royal' => '../assets/images/teams/rcb.png',
-        'Rajasthan' => '../assets/images/teams/rr.png',
-        'Sunrisers' => '../assets/images/teams/srh.png',
-        'Lucknow' => '../assets/images/teams/lsg.png',
-        'Punjab' => '../assets/images/teams/pbks.png'
-    ];
+if (!function_exists('getTeamLogoPath')) {
+    function getTeamLogoPath($team_name) {
+        $team_logos = [
+            'Chennai' => '../assets/images/teams/csk.png',
+            'Delhi' => '../assets/images/teams/dc.png',
+            'Mumbai' => '../assets/images/teams/mi.png',
+            'Kolkata' => '../assets/images/teams/kkr.png',
+            'Gujarat' => '../assets/images/teams/gt.png',
+            'Royal' => '../assets/images/teams/rcb.png',
+            'Rajasthan' => '../assets/images/teams/rr.png',
+            'Sunrisers' => '../assets/images/teams/srh.png',
+            'Lucknow' => '../assets/images/teams/lsg.png',
+            'Punjab' => '../assets/images/teams/pbks.png'
+        ];
 
-    foreach ($team_logos as $key => $path) {
-        if (stripos($team_name, $key) !== false) {
-            return $path;
+        foreach ($team_logos as $key => $path) {
+            if (stripos($team_name, $key) !== false) {
+                return $path;
+            }
         }
-    }
 
-    return null;
+        return null;
+    }
 }
 
 $current_user = getCurrentUser();
@@ -398,6 +400,16 @@ if ($current_player) {
     <style>
         body { background: #0f172a; }
         .auction-room { max-width: 1400px; margin: 0 auto; padding: 2rem; }
+
+        @keyframes bidPulse {
+            0% { transform: scale(1); filter: brightness(1); }
+            35% { transform: scale(1.08); filter: brightness(1.4); text-shadow: 0 0 20px #34d399; color: #34d399; }
+            100% { transform: scale(1); filter: brightness(1); }
+        }
+        .bid-pulse {
+            animation: bidPulse 0.5s ease-out;
+            display: inline-block;
+        }
         
         /* Room Header */
         .room-header {
@@ -1061,7 +1073,7 @@ if ($current_player) {
                     </div>
                 </div>
                 <?php foreach ($participants as $p): ?>
-                    <div class="participant-item <?php echo $p['is_host'] ? 'host' : ''; ?>" onclick="showParticipantDetails(<?php echo $p['participant_id']; ?>)" title="Click to view squad details">
+                    <div class="participant-item <?php echo $p['is_host'] ? 'host' : ''; ?>" id="participant-item-<?php echo $p['participant_id']; ?>" onclick="showParticipantDetails(<?php echo $p['participant_id']; ?>)" title="Click to view squad details">
                                 <div class="participant-name">
                                     <?php if (!empty($p['logo'])): ?>
                                         <img src="<?php echo htmlspecialchars($p['logo']); ?>" alt="<?php echo htmlspecialchars($p['team_name']); ?> logo" style="width:36px;height:36px;vertical-align:middle;margin-right:8px;border-radius:6px;">
@@ -1072,7 +1084,7 @@ if ($current_player) {
                                     <?php if ($p['is_host']): ?><span style="color: #fbbf24;"> 👑</span><?php endif; ?>
                                     <?php if ($p['user_id'] == $current_user['user_id']): ?><span style="color: #34d399;"> (You)</span><?php endif; ?>
                                 </div>
-                        <div class="participant-budget">
+                        <div class="participant-budget" id="participant-budget-<?php echo $p['participant_id']; ?>">
                             💰 ₹<?php echo number_format($p['remaining_budget'] / 10000000, 2); ?> Cr
                             <br>
                             🏏 <?php echo $p['players_bought']; ?> players
@@ -1196,7 +1208,7 @@ if ($current_player) {
                     <div class="bidding-controls">
                         <div class="current-bid">
                             <div class="label">Current Bid</div>
-                            <div class="amount">₹<?php echo number_format($room['current_bid'] / 10000000, 2); ?> Cr</div>
+                            <div class="amount" id="currentBidAmount">₹<?php echo number_format($room['current_bid'] / 10000000, 2); ?> Cr</div>
                         </div>
                         
                         <!-- Bid Timer -->
@@ -1224,15 +1236,15 @@ if ($current_player) {
                         endif; 
                         ?>
 
-                        <div class="bid-buttons">
-                            <form method="POST" style="flex: 1;">
+                        <div class="bid-buttons" id="bidButtonsContainer">
+                            <form method="POST" id="mainBidForm" style="flex: 1;">
                                 <input type="hidden" name="action" value="bid">
-                                <button type="submit" class="btn-bid-player" <?php echo !$can_bid ? 'disabled' : ''; ?> style="<?php echo !$can_bid ? 'opacity: 0.5; cursor: not-allowed;' : ''; ?>">
+                                <button type="submit" id="bidButton" class="btn-bid-player" <?php echo !$can_bid ? 'disabled' : ''; ?> style="<?php echo !$can_bid ? 'opacity: 0.5; cursor: not-allowed;' : ''; ?>">
                                     🏏 Bid for <?php echo htmlspecialchars($current_player['player_name']); ?>
                                 </button>
                             </form>
                             <?php if ($is_in_war): ?>
-                                <form method="POST" style="flex: 1;">
+                                <form method="POST" id="quitBidForm" style="flex: 1;">
                                     <input type="hidden" name="action" value="quit_bid">
                                     <button type="submit" class="btn-not-interested">
                                         ❌ Quit Bidding
@@ -1241,11 +1253,9 @@ if ($current_player) {
                             <?php endif; ?>
                         </div>
                         
-                        <?php if ($war_locked && !$is_in_war): ?>
-                            <div style="text-align: center; margin-top: 1rem; padding: 1rem; background: rgba(239, 68, 68, 0.1); border-radius: 10px; color: #fca5a5;">
-                                <small>🔒 Bidding is locked between two teams. Wait for one to quit.</small>
-                            </div>
-                        <?php endif; ?>
+                        <div id="warLockedNotice" style="display: <?php echo ($war_locked && !$is_in_war) ? 'block' : 'none'; ?>; text-align: center; margin-top: 1rem; padding: 1rem; background: rgba(239, 68, 68, 0.1); border-radius: 10px; color: #fca5a5;">
+                            <small>🔒 Bidding is locked between two teams. Wait for one to quit.</small>
+                        </div>
                     </div>
                 <?php endif; ?>
             </div>
@@ -1260,7 +1270,8 @@ if ($current_player) {
 
                 <!-- Bidding War Tab -->
                 <div id="biddingTab" class="tab-content active">
-                <?php if ($current_player): ?>
+                    <div id="biddingWarContent">
+                    <?php if ($current_player): ?>
                     <?php 
                     $player1_id = $room['bidding_war_player1_id'] ?? null;
                     $player2_id = $room['bidding_war_player2_id'] ?? null;
@@ -1363,6 +1374,7 @@ if ($current_player) {
                         <div style="color: #64748b; font-size: 0.875rem;">No active player</div>
                     </div>
                 <?php endif; ?>
+                    </div><!-- end biddingWarContent -->
                 </div>
 
                 <!-- Chat Tab -->
@@ -1931,72 +1943,35 @@ if ($current_player) {
         
         // Use Unix timestamp from MySQL (timezone-independent)
         <?php if ($timer_expires_timestamp): ?>
-        const serverExpiryTimestamp = <?php echo $timer_expires_timestamp; ?> * 1000; // Convert to milliseconds
-        console.log('Server expiry timestamp:', serverExpiryTimestamp);
-        console.log('Server expiry time:', new Date(serverExpiryTimestamp));
-        console.log('Current time:', new Date());
-        console.log('Calculated remaining (seconds):', Math.ceil((serverExpiryTimestamp - Date.now()) / 1000));
+        let serverExpiryTimestamp = <?php echo $timer_expires_timestamp; ?> * 1000; // Convert to milliseconds
         <?php else: ?>
-        const serverExpiryTimestamp = null;
+        let serverExpiryTimestamp = null;
         <?php endif; ?>
 
-        // Poll room status for non-host participants; redirect to summary when host ends the auction
-        (function() {
-            const amHost = <?php echo $is_host ? 'true' : 'false'; ?>;
-            if (amHost) return;
-            const roomCheck = setInterval(async function() {
-                try {
-                    const resp = await fetch('../ajax/room_status.php?room_id=<?php echo $room_id; ?>');
-                    const data = await resp.json();
-                    if (data && data.success && (data.status === 'completed' || data.status === 'finished')) {
-                        // stop polling and redirect to summary
-                        clearInterval(roomCheck);
-                        window.location.href = 'auction-summary.php?room_id=<?php echo $room_id; ?>';
-                    }
-                } catch (e) {
-                    // ignore errors
-                }
-            }, 3000);
-        })();
-        
+        const currentRoomId = <?php echo intval($room_id); ?>;
+        const currentParticipantId = <?php echo intval($participant_id); ?>;
+        const initialPlayerId = <?php echo $current_player ? intval($current_player['player_id']) : 'null'; ?>;
+        let lastSeenSaleId = null;
+        let currentRoomHash = '';
+        let isSyncing = false;
         let timerInterval = null;
-        
+
         function startTimer() {
             const timerElement = document.getElementById('timer');
-            if (!timerElement) {
-                console.error('Timer element not found!');
-                return;
-            }
-            
-            if (!serverExpiryTimestamp) {
-                console.log('No active timer');
-                return;
-            }
-            
-            console.log('Starting timer, expires at:', new Date(serverExpiryTimestamp));
-            
-            // Clear any existing interval
-            if (timerInterval) {
-                clearInterval(timerInterval);
-            }
-            
-            // Update immediately
+            if (!timerElement || !serverExpiryTimestamp) return;
+
+            if (timerInterval) clearInterval(timerInterval);
             updateTimerDisplay();
-            
-            // Then update every second
-            timerInterval = setInterval(updateTimerDisplay, 1000);
+            timerInterval = setInterval(updateTimerDisplay, 500); // 500ms smooth countdown
         }
-        
+
         function updateTimerDisplay() {
             const timerElement = document.getElementById('timer');
             if (!timerElement || !serverExpiryTimestamp) return;
-            
-            // Calculate time remaining based on server's Unix timestamp
+
             const timeRemaining = Math.max(0, Math.ceil((serverExpiryTimestamp - Date.now()) / 1000));
-            
             timerElement.textContent = timeRemaining;
-            
-            // Change color based on time
+
             if (timeRemaining <= 5) {
                 timerElement.className = 'timer-value danger';
             } else if (timeRemaining <= 10) {
@@ -2004,49 +1979,288 @@ if ($current_player) {
             } else {
                 timerElement.className = 'timer-value';
             }
-            
+
             if (timeRemaining <= 0) {
                 clearInterval(timerInterval);
+                timerInterval = null;
                 console.log('Timer expired, auto-finalizing...');
                 autoFinalizeSale();
             }
         }
-        
+
         function autoFinalizeSale() {
             const form = document.createElement('form');
             form.method = 'POST';
             form.style.display = 'none';
-            
+
             const actionInput = document.createElement('input');
             actionInput.type = 'hidden';
             actionInput.name = 'action';
             actionInput.value = 'finalize';
-            
+
             form.appendChild(actionInput);
             document.body.appendChild(form);
             try { window.suppressAutoPause = true; } catch (err) { }
             form.submit();
         }
-        
-        // Start timer when page loads
-        window.addEventListener('load', function() {
-            console.log('Window loaded event fired');
-            const timerElement = document.getElementById('timer');
-            if (timerElement) {
-                console.log('Timer element found, starting timer...');
-                startTimer();
-            } else {
-                console.log('Timer element NOT found');
+
+        // ============================================================================
+        // REAL-TIME ZERO-LATENCY SYNCHRONIZATION ENGINE
+        // ============================================================================
+        async function syncRoomState(force = false) {
+            if (isSyncing && !force) return;
+            isSyncing = true;
+            try {
+                const url = `../ajax/room_sync.php?room_id=${currentRoomId}&participant_id=${currentParticipantId}&hash=${encodeURIComponent(currentRoomHash)}`;
+                const resp = await fetch(url, { cache: 'no-store' });
+                if (!resp.ok) throw new Error('Sync fetch failed: ' + resp.status);
+                const data = await resp.json();
+
+                if (!data.success) {
+                    isSyncing = false;
+                    return;
+                }
+
+                // If auction is completed or finished, redirect all participants immediately
+                if (data.status === 'completed' || data.status === 'finished') {
+                    window.location.href = `auction-summary.php?room_id=${currentRoomId}`;
+                    return;
+                }
+
+                // If nothing changed and not forced, just ensure timer is accurate
+                if (!data.changed && !force) {
+                    if (data.timer_expires_ts && (!serverExpiryTimestamp || Math.abs(serverExpiryTimestamp - data.timer_expires_ts) > 1000)) {
+                        serverExpiryTimestamp = data.timer_expires_ts;
+                    }
+                    isSyncing = false;
+                    return;
+                }
+
+                // Save new state hash
+                currentRoomHash = data.hash;
+
+                // 1. Detect player change (next player placed on table)
+                const newPlayerId = data.current_player ? data.current_player.player_id : null;
+                if (initialPlayerId !== null && newPlayerId !== null && initialPlayerId != newPlayerId) {
+                    console.log('New player on table! Reloading...');
+                    window.location.reload();
+                    return;
+                }
+                if (initialPlayerId === null && newPlayerId !== null) {
+                    console.log('Player loaded from waiting state! Reloading...');
+                    window.location.reload();
+                    return;
+                }
+
+                // 2. Broadcast sale notification to everyone simultaneously
+                if (data.last_sale && data.last_sale.sale_id && data.last_sale.sale_id !== lastSeenSaleId) {
+                    lastSeenSaleId = data.last_sale.sale_id;
+                    if (typeof showSaleNotification === 'function') {
+                        showSaleNotification(data.last_sale);
+                    }
+                    // Transition to next player after sale announcement
+                    if (!data.current_player) {
+                        setTimeout(() => window.location.reload(), 2500);
+                        return;
+                    }
+                }
+
+                // 3. Update Current Bid Amount with glowing pulse animation
+                const currentBidEl = document.getElementById('currentBidAmount');
+                if (currentBidEl && data.current_bid_cr) {
+                    const newBidText = '₹' + data.current_bid_cr + ' Cr';
+                    if (currentBidEl.textContent !== newBidText) {
+                        currentBidEl.textContent = newBidText;
+                        currentBidEl.classList.remove('bid-pulse');
+                        void currentBidEl.offsetWidth; // trigger reflow
+                        currentBidEl.classList.add('bid-pulse');
+                    }
+                }
+
+                // 4. Update Bid Timer
+                if (data.timer_expires_ts) {
+                    serverExpiryTimestamp = data.timer_expires_ts;
+                    if (!timerInterval) {
+                        startTimer();
+                    } else {
+                        updateTimerDisplay();
+                    }
+                }
+
+                // 5. Update Bid Button with new amounts / state
+                const bidBtn = document.getElementById('bidButton');
+                if (bidBtn && data.current_player) {
+                    if (data.can_bid) {
+                        bidBtn.disabled = false;
+                        bidBtn.style.opacity = '1';
+                        bidBtn.style.cursor = 'pointer';
+                        bidBtn.textContent = `🏏 Bid ₹${data.next_bid_cr} Cr (+${data.increment_cr})`;
+                    } else {
+                        bidBtn.disabled = true;
+                        bidBtn.style.opacity = '0.5';
+                        bidBtn.style.cursor = 'not-allowed';
+                        bidBtn.textContent = data.cannot_bid_reason ? `⏳ ${data.cannot_bid_reason}` : `🏏 Bid for ${data.current_player.player_name}`;
+                    }
+                }
+
+                // 6. Update Locked War Notice
+                const warLockedNotice = document.getElementById('warLockedNotice');
+                if (warLockedNotice) {
+                    const isLocked = data.bidding_war && data.bidding_war.is_locked;
+                    const amInWar = data.is_in_war;
+                    warLockedNotice.style.display = (isLocked && !amInWar) ? 'block' : 'none';
+                }
+
+                // 7. Update Bidding War Panel (VS / Leading Bidder)
+                const warContent = document.getElementById('biddingWarContent');
+                if (warContent && data.current_player && data.bidding_war) {
+                    renderBiddingWarUI(warContent, data);
+                }
+
+                // 8. Update Participant Budgets in sidebar
+                if (data.participants && Array.isArray(data.participants)) {
+                    data.participants.forEach(p => {
+                        const bEl = document.getElementById(`participant-budget-${p.participant_id}`);
+                        if (bEl) {
+                            bEl.innerHTML = `💰 ₹${(p.remaining_budget / 10000000).toFixed(2)} Cr<br>🏏 ${p.players_count || p.players_bought || 0} players`;
+                        }
+                    });
+                }
+
+            } catch (err) {
+                console.error('Real-time sync error:', err);
+            } finally {
+                isSyncing = false;
             }
+        }
+
+        function renderBiddingWarUI(container, data) {
+            const war = data.bidding_war;
+            if (!war) return;
+
+            const p1 = war.player1;
+            const p2 = war.player2;
+
+            if (p1 && p2) {
+                // Locked Battle
+                container.innerHTML = `
+                    <div style="background: rgba(239, 68, 68, 0.1); padding: 0.75rem; border-radius: 8px; border: 2px solid #ef4444; margin-bottom: 1rem; text-align: center;">
+                        <div style="color: #fca5a5; font-size: 0.875rem; font-weight: 700;">🔒 LOCKED BATTLE</div>
+                    </div>
+                    <!-- Player 1 -->
+                    <div style="background: ${p1.is_leading ? 'rgba(96, 165, 250, 0.15)' : 'rgba(255, 255, 255, 0.05)'}; padding: 1.25rem; border-radius: 10px; border: 2px solid ${p1.is_leading ? '#60a5fa' : 'transparent'}; margin-bottom: 1rem;">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem;">
+                            <div>
+                                ${p1.is_leading ? '<span style="font-size: 1.25rem;">👑</span>' : ''}
+                                ${p1.logo ? `<img src="${p1.logo}" alt="logo" style="width:34px;height:34px;vertical-align:middle;margin-right:8px;border-radius:6px;">` : '<span style="font-size:1.1rem; margin-right:8px;">🏏</span>'}
+                                <span style="color: white; font-size: 1.1rem; font-weight: 700;">${p1.team_name}</span>
+                            </div>
+                        </div>
+                        <div style="color: #94a3b8; font-size: 0.75rem; margin-bottom: 0.25rem;">Current Bid</div>
+                        <div style="color: #34d399; font-size: 1.5rem; font-weight: 800;">₹${p1.current_bid_cr} Cr</div>
+                        <div style="color: #94a3b8; font-size: 0.75rem; margin-top: 0.5rem;">Budget: ₹${p1.remaining_budget_cr} Cr</div>
+                    </div>
+
+                    <div style="text-align: center; margin: 1rem 0; color: #64748b; font-weight: 700;">⚔️ VS ⚔️</div>
+
+                    <!-- Player 2 -->
+                    <div style="background: ${p2.is_leading ? 'rgba(96, 165, 250, 0.15)' : 'rgba(255, 255, 255, 0.05)'}; padding: 1.25rem; border-radius: 10px; border: 2px solid ${p2.is_leading ? '#60a5fa' : 'transparent'};">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem;">
+                            <div>
+                                ${p2.is_leading ? '<span style="font-size: 1.25rem;">👑</span>' : ''}
+                                ${p2.logo ? `<img src="${p2.logo}" alt="logo" style="width:34px;height:34px;vertical-align:middle;margin-right:8px;border-radius:6px;">` : '<span style="font-size:1.1rem; margin-right:8px;">🏏</span>'}
+                                <span style="color: white; font-size: 1.1rem; font-weight: 700;">${p2.team_name}</span>
+                            </div>
+                        </div>
+                        <div style="color: #94a3b8; font-size: 0.75rem; margin-bottom: 0.25rem;">Current Bid</div>
+                        <div style="color: #34d399; font-size: 1.5rem; font-weight: 800;">₹${p2.current_bid_cr} Cr</div>
+                        <div style="color: #94a3b8; font-size: 0.75rem; margin-top: 0.5rem;">Budget: ₹${p2.remaining_budget_cr} Cr</div>
+                    </div>
+                `;
+            } else if (p1) {
+                // Single Leader
+                container.innerHTML = `
+                    <div style="background: rgba(96, 165, 250, 0.1); padding: 1.5rem; border-radius: 12px; border: 2px solid #60a5fa;">
+                        <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 1rem;">
+                            <span style="font-size: 2rem;">👑</span>
+                            <div>
+                                <div style="color: #60a5fa; font-size: 0.875rem; text-transform: uppercase; letter-spacing: 0.05em;">Leading Bid</div>
+                                <div style="color: white; font-size: 1.5rem; font-weight: 700; margin-top: 0.25rem;">
+                                    ${p1.logo ? `<img src="${p1.logo}" alt="logo" style="width:36px;height:36px;vertical-align:middle;margin-right:8px;border-radius:6px;">` : '<span style="font-size:1.5rem; margin-right:8px;">🏏</span>'}
+                                    ${p1.team_name}
+                                </div>
+                            </div>
+                        </div>
+                        <div style="border-top: 1px solid rgba(96, 165, 250, 0.2); padding-top: 1rem; margin-top: 1rem;">
+                            <div style="color: #94a3b8; font-size: 0.875rem; margin-bottom: 0.5rem;">Bid Amount</div>
+                            <div style="color: #34d399; font-size: 1.75rem; font-weight: 800;">₹${p1.current_bid_cr} Cr</div>
+                        </div>
+                        <div style="border-top: 1px solid rgba(96, 165, 250, 0.2); padding-top: 1rem; margin-top: 1rem;">
+                            <div style="color: #94a3b8; font-size: 0.875rem; margin-bottom: 0.5rem;">Remaining Budget</div>
+                            <div style="color: #fbbf24; font-size: 1.25rem; font-weight: 700;">₹${p1.remaining_budget_cr} Cr</div>
+                        </div>
+                    </div>
+                    <div style="background: rgba(251, 191, 36, 0.1); padding: 1rem; border-radius: 8px; margin-top: 1rem; text-align: center;">
+                        <div style="color: #fbbf24; font-size: 0.875rem;">⏳ Waiting for second bidder...</div>
+                    </div>
+                `;
+            } else {
+                container.innerHTML = `
+                    <div style="background: rgba(255, 255, 255, 0.05); padding: 2rem; border-radius: 12px; text-align: center;">
+                        <div style="font-size: 3rem; margin-bottom: 1rem;">🔍</div>
+                        <div style="color: #94a3b8; font-size: 1.1rem;">No bids yet</div>
+                        <div style="color: #64748b; font-size: 0.875rem; margin-top: 0.5rem;">Waiting for first bid...</div>
+                    </div>
+                `;
+            }
+        }
+
+        // Setup instant AJAX bidding for 0 latency
+        function setupAjaxBidding() {
+            const bidForm = document.getElementById('mainBidForm');
+            if (!bidForm) return;
+
+            bidForm.addEventListener('submit', async function(e) {
+                e.preventDefault();
+                const btn = document.getElementById('bidButton');
+                if (btn) {
+                    btn.disabled = true;
+                    btn.textContent = '⚡ Placing Bid...';
+                }
+
+                try {
+                    const fd = new FormData();
+                    fd.append('room_id', currentRoomId);
+                    fd.append('participant_id', currentParticipantId);
+
+                    const res = await fetch('../ajax/place_room_bid.php', {
+                        method: 'POST',
+                        body: fd
+                    });
+                    const result = await res.json();
+
+                    if (!result.success) {
+                        alert(result.message || 'Bid could not be placed');
+                    }
+
+                    // Immediately trigger sync
+                    await syncRoomState(true);
+                } catch (err) {
+                    console.error('AJAX bid failed, falling back to standard submit:', err);
+                    bidForm.submit();
+                }
+            });
+        }
+
+        // Start high-frequency real-time polling (every 500ms)
+        setInterval(syncRoomState, 500);
+
+        // Start timer and setup bidding on window load
+        window.addEventListener('load', function() {
+            startTimer();
+            setupAjaxBidding();
+            syncRoomState(true); // immediate first sync
         });
-        
-        // Auto-refresh for synchronization
-        <?php if ($current_player && $room['status'] == 'active'): ?>
-        setInterval(function() {
-            if (timeRemaining > 0) return;
-            window.location.reload();
-        }, 3000);
-        <?php endif; ?>
         
         // Auto-pause when host leaves the auction room
         <?php if ($is_host && (!empty($room['status']) && $room['status'] != 'waiting' && $room['status'] != 'completed' && $room['status'] != 'paused')): ?>

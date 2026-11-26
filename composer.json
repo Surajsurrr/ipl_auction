@@ -1,0 +1,12 @@
+{
+    "name": "suraj/ipl-auction",
+    "description": "Virtual IPL Auction Platform",
+    "type": "project",
+    "require": {
+        "php": ">=8.0",
+        "ext-mysqli": "*",
+        "ext-json": "*",
+        "ext-session": "*"
+    }
+}
+

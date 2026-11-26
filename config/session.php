@@ -1,6 +1,11 @@
 <?php
 // Session management
 if (session_status() == PHP_SESSION_NONE) {
+    if (!ini_get('session.save_path') || !is_writable(ini_get('session.save_path'))) {
+        @session_save_path('/tmp');
+    }
+    @ini_set('session.cookie_httponly', 1);
+    @ini_set('session.use_only_cookies', 1);
     session_start();
 }
 
@@ -24,7 +29,8 @@ function getCurrentUser() {
 // Require login
 function requireLogin() {
     if (!isLoggedIn()) {
-        header('Location: /ipl_auction/auth/login.php');
+        $prefix = (strpos($_SERVER['REQUEST_URI'] ?? '', '/ipl_auction') !== false) ? '/ipl_auction' : '';
+        header('Location: ' . $prefix . '/auth/login.php');
         exit();
     }
 }
