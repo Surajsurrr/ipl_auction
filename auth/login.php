@@ -42,6 +42,10 @@
                     $_SESSION['username'] = $user['username'];
                     $_SESSION['full_name'] = $user['full_name'];
                     
+                    // Set persistent signed authentication cookie for serverless environments (Vercel)
+                    $authToken = signAuthToken($user['user_id'], $user['username'], $user['full_name'] ?? '');
+                    setcookie('ipl_auth', $authToken, time() + (86400 * 30), '/', '', isset($_SERVER['HTTPS']), true);
+                    
                     closeDBConnection($conn);
                     header('Location: ../user/dashboard.php');
                     exit();

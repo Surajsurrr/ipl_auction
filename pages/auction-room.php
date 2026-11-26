@@ -2030,19 +2030,22 @@ if ($current_player) {
                 }
 
                 // A. Detect host starting the auction from waiting state -> reload all participants immediately
-                if (initialRoomStatus === 'waiting' && data.status && data.status !== 'waiting') {
+                const normStatus = s => (s === 'active' ? 'in_progress' : (s || ''));
+                if (normStatus(initialRoomStatus) === 'waiting' && normStatus(data.status) && normStatus(data.status) !== 'waiting') {
                     console.log('Auction started by host! Reloading into live room...');
+                    initialRoomStatus = data.status;
                     window.location.reload();
                     return;
                 }
-                if (initialRoomStatus !== data.status && (data.status === 'in_progress' || data.status === 'paused')) {
+                if (normStatus(initialRoomStatus) !== normStatus(data.status) && (normStatus(data.status) === 'in_progress' || normStatus(data.status) === 'paused')) {
                     console.log('Room status changed from ' + initialRoomStatus + ' to ' + data.status + '! Reloading...');
+                    initialRoomStatus = data.status;
                     window.location.reload();
                     return;
                 }
 
                 // B. In waiting room: detect when a new team enters or leaves -> reload waiting room immediately
-                if (initialRoomStatus === 'waiting' && data.participant_count !== undefined && data.participant_count !== currentParticipantCount) {
+                if (normStatus(initialRoomStatus) === 'waiting' && data.participant_count !== undefined && data.participant_count !== currentParticipantCount) {
                     console.log(`Participant count changed from ${currentParticipantCount} to ${data.participant_count}! Reloading waiting room...`);
                     currentParticipantCount = data.participant_count;
                     window.location.reload();
@@ -2328,10 +2331,6 @@ if ($current_player) {
                 xhr.send(formData);
             }
         }
-        
-        // Pause on page unload
-        window.addEventListener('beforeunload', pauseAuction);
-        window.addEventListener('pagehide', pauseAuction);
         
         // Pause when clicking "Back to My Auctions" link
         document.addEventListener('DOMContentLoaded', function() {
